@@ -40,7 +40,7 @@ Dependencies: `flask`, `pyyaml` (server); `requests`, `pyyaml` (agent). No virtu
 
 To test locally:
 ```bash
-cd server && python app.py                    # starts on :5000
+cd server && python app.py                    # starts on :5050
 cd agent && python agent.py --once            # sync once to localhost
 ```
 

@@ -42,7 +42,7 @@ python app.py
 # Or install as a service (see below)
 ```
 
-Dashboard available at `http://localhost:5000`.
+Dashboard available at `http://localhost:5050`.
 
 ### 2. Agent Setup (each machine)
 
@@ -162,26 +162,26 @@ Exposes your server securely without opening ports or configuring firewalls.
 cloudflared tunnel login
 cloudflared tunnel create claude-dashboard
 cloudflared tunnel route dns claude-dashboard sessions.yourdomain.com
-cloudflared tunnel --url http://localhost:5000 run claude-dashboard
+cloudflared tunnel --url http://localhost:5050 run claude-dashboard
 ```
 
 Then configure **Cloudflare Access** in the Zero Trust dashboard to add authentication (Google, GitHub, email OTP) for browser access. Agents bypass Cloudflare Access by using the API key header directly — add a [Service Auth token](https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/) or bypass policy for the `/api/sync` path.
 
 ### Option B: Tailscale / ZeroTier (private mesh VPN)
 
-If all machines are on Tailscale, the server is reachable via its Tailscale IP (e.g., `http://100.x.y.z:5000`). No public exposure needed.
+If all machines are on Tailscale, the server is reachable via its Tailscale IP (e.g., `http://100.x.y.z:5050`). No public exposure needed.
 
 ### Option C: Direct IP / LAN
 
-If machines are on the same network, use the server's LAN IP directly. For machines on different networks, you'll need port forwarding on your router (port 5000).
+If machines are on the same network, use the server's LAN IP directly. For machines on different networks, you'll need port forwarding on your router (port 5050).
 
 Set the agent config accordingly:
 
 ```yaml
 # agent-config.yaml
 server_url: "https://sessions.yourdomain.com"  # Cloudflare Tunnel
-# server_url: "http://100.64.0.1:5000"         # Tailscale
-# server_url: "http://192.168.1.50:5000"        # LAN
+# server_url: "http://100.64.0.1:5050"         # Tailscale
+# server_url: "http://192.168.1.50:5050"        # LAN
 ```
 
 ## Raw JSONL Backups
@@ -196,7 +196,7 @@ In addition to the SQLite database, the server stores raw JSONL session files in
 |-----|-------------|---------|
 | `api_key` | Shared secret for agent auth | (required) |
 | `host` | Bind address | `0.0.0.0` |
-| `port` | Port | `5000` |
+| `port` | Port | `5050` |
 | `db_path` | SQLite database path | `./sessions.db` |
 | `backup_dir` | Raw JSONL backup directory | `./backups` |
 | `debug` | Flask debug mode | `false` |
