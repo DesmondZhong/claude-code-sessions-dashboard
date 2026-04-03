@@ -53,36 +53,27 @@ pip install -r requirements.txt
 # Edit config — set server URL, API key, and machine name
 vim agent-config.yaml
 
-# Sync once
+# Test sync works
 python agent.py --once
 
-# Or run as daemon
-python agent.py --daemon
-```
-
-### 3. Cron Setup (optional)
-
-Sync every 5 minutes:
-
-```bash
-crontab -e
-# Add:
-*/5 * * * * cd /path/to/claude-sessions/agent && python3 agent.py --once >> /tmp/claude-sync.log 2>&1
-```
-
-## Installing as a Service
-
-The server can be installed as a persistent service that starts on boot.
-
-### Linux (systemd)
-
-```bash
-cd server
+# Install as a service (recommended — no cron or tmux needed)
 chmod +x install-service.sh
 ./install-service.sh
 ```
 
-Manage with:
+The agent runs in daemon mode as a background service, syncing every 5 minutes (configurable via `sync_interval` in `agent-config.yaml`). It starts automatically on boot.
+
+## Service Management
+
+Both the server and agent can be installed as persistent services that start on boot. No tmux, screen, or cron needed.
+
+### Linux (systemd)
+
+**Server:**
+```bash
+cd server && chmod +x install-service.sh && ./install-service.sh
+```
+
 ```bash
 sudo systemctl status claude-dashboard
 sudo systemctl stop claude-dashboard
@@ -90,17 +81,27 @@ sudo systemctl restart claude-dashboard
 sudo journalctl -u claude-dashboard -f   # view logs
 ```
 
-Uninstall: `./uninstall-service.sh`
+**Agent (on each machine):**
+```bash
+cd agent && chmod +x install-service.sh && ./install-service.sh
+```
+
+```bash
+sudo systemctl status claude-dashboard-agent
+sudo systemctl stop claude-dashboard-agent
+sudo systemctl restart claude-dashboard-agent
+sudo journalctl -u claude-dashboard-agent -f
+```
+
+Uninstall either with `./uninstall-service.sh` in the respective directory.
 
 ### macOS (launchd)
 
+**Server:**
 ```bash
-cd server
-chmod +x install-service.sh
-./install-service.sh
+cd server && chmod +x install-service.sh && ./install-service.sh
 ```
 
-Manage with:
 ```bash
 launchctl list | grep claude-dashboard
 launchctl stop com.claude-dashboard
@@ -108,18 +109,37 @@ launchctl start com.claude-dashboard
 tail -f /tmp/claude-dashboard.log
 ```
 
-Uninstall: `./uninstall-service.sh`
+**Agent:**
+```bash
+cd agent && chmod +x install-service.sh && ./install-service.sh
+```
+
+```bash
+launchctl list | grep claude-dashboard-agent
+launchctl stop com.claude-dashboard-agent
+launchctl start com.claude-dashboard-agent
+tail -f /tmp/claude-dashboard-agent.log
+```
+
+Uninstall either with `./uninstall-service.sh` in the respective directory.
 
 ### Windows (NSSM or Scheduled Task)
 
 Run PowerShell as Administrator:
 
+**Server:**
 ```powershell
 cd server
 .\install-service.ps1
 ```
 
-If [NSSM](https://nssm.cc/) is installed, it creates a proper Windows service. Otherwise, it falls back to a scheduled task that runs at logon.
+**Agent:**
+```powershell
+cd agent
+.\install-service.ps1
+```
+
+If [NSSM](https://nssm.cc/) is installed, these create proper Windows services. Otherwise, they fall back to scheduled tasks that run at logon.
 
 ## Making the Server Reachable Across Machines
 
