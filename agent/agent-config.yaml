@@ -1,5 +1,5 @@
 # Claude Sessions Sync Agent — Configuration
-server_url: "http://your-server:5000"
+server_url: "http://localhost:5050"
 api_key: "change-me-to-a-secret"
 vm_name: "my-vm"  # unique label for this machine
 sync_interval: 3600  # seconds, default 1 hour (for daemon mode)

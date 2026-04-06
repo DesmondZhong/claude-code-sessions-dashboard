@@ -49,3 +49,4 @@ cd agent && python agent.py --once            # sync once to localhost
 - Keep the server as a single `app.py` file. Don't split into multiple modules unless it exceeds ~800 lines.
 - Dashboard UI changes go in the `DASHBOARD_HTML` string in `app.py`.
 - Agent must work on Linux, macOS, and Windows. Avoid Unix-only APIs in core logic (signal handling is gated behind `hasattr(signal, "SIGUSR1")`).
+- Commit every meaningful change before ending a session. Don't leave work uncommitted.

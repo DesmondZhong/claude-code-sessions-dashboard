@@ -148,6 +148,9 @@ def parse_session_file(jsonl_path, session_id, history_index):
                 content = str(content_raw)
 
             if entry_type == "user" and role == "user":
+                # Skip entries that are purely tool_result blocks (already captured above)
+                if isinstance(content_raw, list) and not content.strip():
+                    continue
                 user_msg_count += 1
                 if summary is None and content.strip():
                     summary = content.strip()[:200]

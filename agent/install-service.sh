@@ -6,7 +6,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 AGENT_PY="$SCRIPT_DIR/agent.py"
 CONFIG="$SCRIPT_DIR/agent-config.yaml"
+# Resolve to absolute path so launchd/systemd work without pyenv/asdf/nvm init
 PYTHON="${PYTHON:-python3}"
+PYTHON="$($PYTHON -c 'import sys; print(sys.executable)')"
 
 if [ ! -f "$AGENT_PY" ]; then
     echo "Error: agent.py not found at $AGENT_PY"

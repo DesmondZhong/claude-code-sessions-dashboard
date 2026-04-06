@@ -6,7 +6,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_PY="$SCRIPT_DIR/app.py"
 CONFIG="$SCRIPT_DIR/server-config.yaml"
+# Resolve to absolute path so launchd/systemd work without pyenv/asdf/nvm init
 PYTHON="${PYTHON:-python3}"
+PYTHON="$($PYTHON -c 'import sys; print(sys.executable)')"
 
 if [ ! -f "$APP_PY" ]; then
     echo "Error: app.py not found at $APP_PY"
