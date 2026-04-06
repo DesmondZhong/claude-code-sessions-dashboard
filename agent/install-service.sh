@@ -15,6 +15,9 @@ if [ ! -f "$AGENT_PY" ]; then
     exit 1
 fi
 
+echo "Installing Python dependencies..."
+"$PYTHON" -m pip install -r "$SCRIPT_DIR/requirements.txt" --quiet
+
 if [ ! -f "$CONFIG" ]; then
     echo "Error: agent-config.yaml not found. Copy agent-config.yaml and edit it first."
     exit 1

@@ -15,6 +15,9 @@ if [ ! -f "$APP_PY" ]; then
     exit 1
 fi
 
+echo "Installing Python dependencies..."
+"$PYTHON" -m pip install -r "$SCRIPT_DIR/requirements.txt" --quiet
+
 case "$(uname -s)" in
     Linux)
         echo "Installing systemd service..."
