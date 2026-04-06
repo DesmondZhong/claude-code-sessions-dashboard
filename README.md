@@ -218,6 +218,27 @@ In addition to the SQLite database, the server stores raw JSONL session files in
 | `python agent.py --daemon` | Run continuously (used by the service) |
 | `python agent.py --trigger` | Signal running daemon to sync immediately |
 
+## Local Development / Debug Mode
+
+To run the server with Flask's debug mode (auto-reload on code changes, detailed error pages, interactive debugger):
+
+```bash
+cd server
+
+# Option 1: Set debug: true in server-config.yaml
+# debug: true
+
+# Option 2: Use Flask's environment variable (overrides config)
+FLASK_DEBUG=1 python app.py
+```
+
+Debug mode enables:
+- **Auto-reload** — the server restarts automatically when you edit `app.py`
+- **Interactive debugger** — in-browser debugger on unhandled exceptions
+- **Detailed tracebacks** — full stack traces instead of generic 500 errors
+
+> **Warning:** Never run debug mode in production. The interactive debugger allows arbitrary code execution.
+
 ## Dashboard Features
 
 The web dashboard includes:
@@ -225,3 +246,4 @@ The web dashboard includes:
 - **Agents panel** — expandable section at the top showing all connected agents with their name, IP address, session count, last sync time, and online/stale/offline status
 - **Session list** — all sessions across all machines, searchable and filterable by VM or project
 - **Session detail** — click any session to view the full conversation with collapsible tool calls
+- **Message navigation** — sticky sidebar listing all user messages for quick jump-to navigation within a session

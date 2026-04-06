@@ -258,11 +258,31 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Sessions Dashboard</title>
 <style>
-  :root {
+  :root, [data-theme="dark"] {
     --bg: #0d1117; --surface: #161b22; --border: #30363d;
     --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff;
     --accent-hover: #79c0ff; --user-bg: #1c2333; --assistant-bg: #121820;
     --system-bg: #1a1412; --tool-bg: #12191a;
+    --code-bg: rgba(110,118,129,0.2); --pre-bg: rgba(110,118,129,0.15);
+    --hover-overlay: rgba(255,255,255,0.03);
+  }
+  [data-theme="light"] {
+    --bg: #f6f8fa; --surface: #ffffff; --border: #d0d7de;
+    --text: #1f2328; --text-muted: #656d76; --accent: #0969da;
+    --accent-hover: #0550ae; --user-bg: #ddf4ff; --assistant-bg: #dafbe1;
+    --system-bg: #fff8c5; --tool-bg: #f0e8ff;
+    --code-bg: rgba(175,184,193,0.2); --pre-bg: rgba(175,184,193,0.15);
+    --hover-overlay: rgba(0,0,0,0.03);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f8fa; --surface: #ffffff; --border: #d0d7de;
+      --text: #1f2328; --text-muted: #656d76; --accent: #0969da;
+      --accent-hover: #0550ae; --user-bg: #ddf4ff; --assistant-bg: #dafbe1;
+      --system-bg: #fff8c5; --tool-bg: #f0e8ff;
+      --code-bg: rgba(175,184,193,0.2); --pre-bg: rgba(175,184,193,0.15);
+      --hover-overlay: rgba(0,0,0,0.03);
+    }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
@@ -283,8 +303,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   input:focus, select:focus { outline: none; border-color: var(--accent); }
   button { cursor: pointer; background: var(--surface); }
   button:hover { border-color: var(--accent); }
-  .btn-primary { background: #238636; border-color: #2ea043; }
+  .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
   .btn-primary:hover { background: #2ea043; }
+  .btn-theme { font-size: 16px; padding: 4px 10px; line-height: 1; }
 
   .search-input { flex: 1; min-width: 200px; }
 
@@ -313,14 +334,31 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
   /* Session Detail */
   .detail-view { display: none; }
-  .detail-view.active { display: block; }
+  .detail-view.active { display: flex; gap: 16px; }
   .list-view.hidden { display: none; }
 
   .back-btn { margin-bottom: 16px; }
+
+  .detail-main { flex: 1; min-width: 0; }
   .session-meta { background: var(--surface); padding: 16px; border-radius: 8px;
                    margin-bottom: 16px; border: 1px solid var(--border); }
   .session-meta h2 { font-size: 16px; margin-bottom: 8px; }
   .session-meta .meta-row { display: flex; gap: 24px; font-size: 13px; color: var(--text-muted); }
+
+  .msg-nav { width: 260px; flex-shrink: 0; position: sticky; top: 60px;
+             align-self: flex-start; max-height: calc(100vh - 80px); overflow-y: auto; }
+  .msg-nav-inner { background: var(--surface); border: 1px solid var(--border);
+                    border-radius: 8px; padding: 8px 0; }
+  .msg-nav-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+                    color: var(--text-muted); padding: 4px 12px 8px; font-weight: 600; }
+  .msg-nav-item { display: block; padding: 6px 12px; font-size: 13px; cursor: pointer;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                   color: var(--text); border-left: 2px solid transparent;
+                   transition: background 0.1s, border-color 0.1s; }
+  .msg-nav-item:hover { background: var(--hover-overlay); }
+  .msg-nav-item.active { border-left-color: var(--accent); background: var(--hover-overlay);
+                          color: var(--accent); }
+  .msg-nav-item .nav-index { color: var(--text-muted); font-size: 11px; margin-right: 4px; }
 
   .messages { display: flex; flex-direction: column; gap: 8px; }
   .message { padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); }
@@ -332,9 +370,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .message .role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
                     color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
   .message .content { white-space: pre-wrap; word-break: break-word; font-size: 14px; }
-  .message .content code { background: rgba(110,118,129,0.2); padding: 2px 6px;
+  .message .content code { background: var(--code-bg); padding: 2px 6px;
                             border-radius: 3px; font-size: 13px; }
-  .message .content pre { background: rgba(110,118,129,0.15); padding: 12px;
+  .message .content pre { background: var(--pre-bg); padding: 12px;
                            border-radius: 6px; overflow-x: auto; margin: 8px 0; }
   .message .content pre code { background: none; padding: 0; }
   .message .timestamp { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
@@ -350,7 +388,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                    border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
   .agents-header { padding: 10px 16px; cursor: pointer; user-select: none;
                     display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
-  .agents-header:hover { background: rgba(255,255,255,0.03); }
+  .agents-header:hover { background: var(--hover-overlay); }
   .agents-header .arrow { font-size: 10px; transition: transform 0.15s; }
   .agents-header .arrow.open { transform: rotate(90deg); }
   .agents-header .badge { background: var(--accent); color: #fff; font-size: 11px;
@@ -375,6 +413,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     .session-row .time, .session-row .count { text-align: left; }
     .header { flex-wrap: wrap; }
     .header .controls { flex-wrap: wrap; }
+    .msg-nav { display: none; }
+    .detail-view.active { display: block; }
   }
 </style>
 </head>
@@ -386,6 +426,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <select id="vm-filter"><option value="">All VMs</option></select>
     <select id="project-filter"><option value="">All Projects</option></select>
     <button class="btn-primary" onclick="refresh()">Refresh</button>
+    <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode"></button>
   </div>
 </div>
 <div class="container">
@@ -409,9 +450,17 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div class="session-list" id="session-list"></div>
   </div>
   <div class="detail-view" id="detail-view">
-    <button class="back-btn" onclick="showList()">&larr; Back to list</button>
-    <div class="session-meta" id="session-meta"></div>
-    <div class="messages" id="messages"></div>
+    <div class="detail-main">
+      <button class="back-btn" onclick="showList()">&larr; Back to list</button>
+      <div class="session-meta" id="session-meta"></div>
+      <div class="messages" id="messages"></div>
+    </div>
+    <nav class="msg-nav" id="msg-nav">
+      <div class="msg-nav-inner">
+        <div class="msg-nav-title">User Messages</div>
+        <div id="msg-nav-list"></div>
+      </div>
+    </nav>
   </div>
 </div>
 <script>
@@ -542,9 +591,11 @@ async function showDetail(id) {
     </div>`;
 
   const msgs = data.messages;
-  document.getElementById('messages').innerHTML = msgs.map(m => {
+  let userMsgIndex = 0;
+  document.getElementById('messages').innerHTML = msgs.map((m, i) => {
     const role = m.role || m.message_type || 'system';
     const cls = ['user','assistant','system','tool'].includes(role) ? role : 'system';
+    const msgId = role === 'user' ? `id="user-msg-${userMsgIndex++}"` : '';
     if (m.message_type === 'tool_call' || m.message_type === 'tool_result') {
       return `<div class="message tool">
         <div class="role collapsible" onclick="this.classList.toggle('open')">${esc(m.message_type)}</div>
@@ -552,12 +603,24 @@ async function showDetail(id) {
         ${m.timestamp ? `<div class="timestamp">${formatTime(m.timestamp)}</div>` : ''}
       </div>`;
     }
-    return `<div class="message ${cls}">
+    return `<div ${msgId} class="message ${cls}">
       <div class="role">${esc(role)}</div>
       <div class="content">${renderContent(m.content)}</div>
       ${m.timestamp ? `<div class="timestamp">${formatTime(m.timestamp)}</div>` : ''}
     </div>`;
   }).join('');
+
+  // Build nav sidebar with user messages
+  const userMsgs = msgs.filter(m => (m.role || m.message_type) === 'user');
+  document.getElementById('msg-nav-list').innerHTML = userMsgs.map((m, i) => {
+    const preview = (m.content || '').replace(/\\s+/g, ' ').slice(0, 60) || '(empty)';
+    return `<div class="msg-nav-item" data-target="user-msg-${i}" onclick="scrollToMsg(this, ${i})" title="${esc(m.content || '')}">
+      <span class="nav-index">${i + 1}.</span>${esc(preview)}
+    </div>`;
+  }).join('');
+
+  // Set up intersection observer for active state
+  setupNavObserver();
 }
 
 function renderContent(text) {
@@ -569,7 +632,35 @@ function renderContent(text) {
   return s;
 }
 
+function scrollToMsg(navItem, index) {
+  const target = document.getElementById('user-msg-' + index);
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Update active state immediately
+  document.querySelectorAll('.msg-nav-item').forEach(el => el.classList.remove('active'));
+  navItem.classList.add('active');
+}
+
+let navObserver = null;
+function setupNavObserver() {
+  if (navObserver) navObserver.disconnect();
+  const targets = document.querySelectorAll('[id^="user-msg-"]');
+  if (!targets.length) return;
+  navObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        document.querySelectorAll('.msg-nav-item').forEach(el => {
+          el.classList.toggle('active', el.dataset.target === id);
+        });
+      }
+    });
+  }, { rootMargin: '-60px 0px -60% 0px', threshold: 0 });
+  targets.forEach(t => navObserver.observe(t));
+}
+
 function showList() {
+  if (navObserver) { navObserver.disconnect(); navObserver = null; }
   document.getElementById('list-view').classList.remove('hidden');
   document.getElementById('detail-view').classList.remove('active');
 }
@@ -585,6 +676,29 @@ document.getElementById('search').addEventListener('input', () => {
 document.getElementById('vm-filter').addEventListener('change', loadSessions);
 document.getElementById('project-filter').addEventListener('change', loadSessions);
 
+function getTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved) return saved;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyTheme(theme) {
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  document.getElementById('theme-toggle').textContent = theme === 'light' ? '\\u263E' : '\\u2600';
+}
+
+function toggleTheme() {
+  const current = getTheme();
+  const next = current === 'light' ? 'dark' : 'light';
+  localStorage.setItem('theme', next);
+  applyTheme(next);
+}
+
+applyTheme(getTheme());
 loadSessions();
 loadAgents();
 </script>
