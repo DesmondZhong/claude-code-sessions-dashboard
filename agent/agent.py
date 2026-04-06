@@ -15,6 +15,12 @@ from pathlib import Path
 import requests
 import yaml
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+except ImportError:
+    pass
+
 DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "agent-config.yaml")
 STATE_DIR = os.path.expanduser("~/.claude-dashboard-agent")
 STATE_FILE = os.path.join(STATE_DIR, "state.json")

@@ -11,6 +11,12 @@ from pathlib import Path
 import yaml
 from flask import Flask, g, jsonify, request, Response
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+except ImportError:
+    pass
+
 app = Flask(__name__)
 
 BACKUP_DIR = None  # set during init
