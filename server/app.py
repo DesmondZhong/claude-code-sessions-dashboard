@@ -55,6 +55,7 @@ def init_db():
             id TEXT PRIMARY KEY,
             vm_name TEXT NOT NULL,
             project TEXT,
+            custom_title TEXT DEFAULT '',
             summary TEXT,
             message_count INTEGER DEFAULT 0,
             first_timestamp TEXT,
@@ -62,6 +63,11 @@ def init_db():
             updated_at TEXT
         )
     """)
+    # Migration: add custom_title column if missing (existing DBs)
+    try:
+        db.execute("ALTER TABLE sessions ADD COLUMN custom_title TEXT DEFAULT ''")
+    except Exception:
+        pass  # column already exists
     db.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,17 +150,19 @@ def sync():
             continue
 
         db.execute("""
-            INSERT INTO sessions (id, vm_name, project, summary, message_count, first_timestamp, last_timestamp, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO sessions (id, vm_name, project, custom_title, summary, message_count, first_timestamp, last_timestamp, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 message_count = excluded.message_count,
                 last_timestamp = excluded.last_timestamp,
+                custom_title = excluded.custom_title,
                 summary = excluded.summary,
                 updated_at = excluded.updated_at
         """, (
             session_id,
             vm_name,
             sess.get("project", ""),
+            sess.get("custom_title", ""),
             sess.get("summary", ""),
             sess.get("message_count", 0),
             sess.get("first_timestamp", ""),
@@ -202,8 +210,8 @@ def list_sessions():
         query += " AND project LIKE ?"
         params.append(f"%{project}%")
     if search:
-        query += " AND (summary LIKE ? OR project LIKE ?)"
-        params.extend([f"%{search}%", f"%{search}%"])
+        query += " AND (summary LIKE ? OR project LIKE ? OR custom_title LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
 
     query += " ORDER BY last_timestamp DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
@@ -547,7 +555,7 @@ function renderList(sessions) {
     <div class="session-row" onclick="showDetail('${esc(s.id)}')">
       <span class="vm">${esc(s.vm_name)}</span>
       <span class="project" title="${esc(s.project)}">${esc(shortProject(s.project))}</span>
-      <span class="summary">${esc(s.summary || '(no summary)')}</span>
+      <span class="summary">${s.custom_title ? '<strong>' + esc(s.custom_title) + '</strong> — ' : ''}${esc(s.summary || '(no summary)')}</span>
       <span class="count">${s.message_count} msgs</span>
       <span class="time">${formatTime(s.last_timestamp)}</span>
     </div>`).join('');
@@ -582,7 +590,7 @@ async function showDetail(id) {
   const s = data.session;
 
   document.getElementById('session-meta').innerHTML = `
-    <h2>${esc(s.summary || s.id)}</h2>
+    <h2>${esc(s.custom_title || s.summary || s.id)}</h2>
     <div class="meta-row">
       <span>VM: <strong>${esc(s.vm_name)}</strong></span>
       <span>Project: <strong>${esc(s.project)}</strong></span>

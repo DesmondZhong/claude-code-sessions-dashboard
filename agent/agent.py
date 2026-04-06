@@ -93,6 +93,7 @@ def parse_session_file(jsonl_path, session_id, history_index):
     messages = []
     first_ts = None
     last_ts = None
+    custom_title = None
     summary = None
     user_msg_count = 0
 
@@ -106,6 +107,10 @@ def parse_session_file(jsonl_path, session_id, history_index):
             entry_type = entry.get("type", "")
             timestamp = entry.get("timestamp", "")
             msg = entry.get("message", {})
+
+            if entry_type == "custom-title":
+                custom_title = entry.get("customTitle", "")
+                continue
 
             if not timestamp:
                 continue
@@ -189,6 +194,7 @@ def parse_session_file(jsonl_path, session_id, history_index):
     return {
         "id": session_id,
         "project": project,
+        "custom_title": custom_title or "",
         "summary": summary or "(no summary)",
         "message_count": user_msg_count,
         "first_timestamp": first_ts,
