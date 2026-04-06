@@ -27,7 +27,20 @@ _sync_now = threading.Event()
 
 def load_config(config_path):
     with open(config_path) as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f) or {}
+    # Environment variables override yaml values
+    env_map = {
+        "CLAUDE_DASHBOARD_API_KEY": "api_key",
+        "CLAUDE_DASHBOARD_SERVER_URL": "server_url",
+        "CLAUDE_DASHBOARD_VM_NAME": "vm_name",
+        "CF_ACCESS_CLIENT_ID": "cf_access_client_id",
+        "CF_ACCESS_CLIENT_SECRET": "cf_access_client_secret",
+    }
+    for env_key, cfg_key in env_map.items():
+        val = os.environ.get(env_key)
+        if val is not None:
+            cfg[cfg_key] = val
+    return cfg
 
 
 def load_state():

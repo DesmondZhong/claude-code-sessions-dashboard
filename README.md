@@ -214,27 +214,29 @@ In addition to the SQLite database, the server stores raw JSONL session files in
 
 ## Configuration
 
+All config values can be overridden with environment variables, so you don't need to put secrets in the yaml files. Environment variables take precedence over yaml values. You can set them in a `.env` file (already gitignored) or export them in your shell.
+
 ### Server (`server/server-config.yaml`)
 
-| Key | Description | Default |
-|-----|-------------|---------|
-| `api_key` | Shared secret for agent auth | (required) |
-| `host` | Bind address | `0.0.0.0` |
-| `port` | Port | `5050` |
-| `db_path` | SQLite database path | `./sessions.db` |
-| `backup_dir` | Raw JSONL backup directory | `./backups` |
-| `debug` | Flask debug mode | `false` |
+| Key | Env var | Description | Default |
+|-----|---------|-------------|---------|
+| `api_key` | `CLAUDE_DASHBOARD_API_KEY` | Shared secret for agent auth | (required) |
+| `host` | `CLAUDE_DASHBOARD_HOST` | Bind address | `0.0.0.0` |
+| `port` | `CLAUDE_DASHBOARD_PORT` | Port | `5050` |
+| `db_path` | `CLAUDE_DASHBOARD_DB_PATH` | SQLite database path | `./sessions.db` |
+| `backup_dir` | — | Raw JSONL backup directory | `./backups` |
+| `debug` | — | Flask debug mode | `false` |
 
 ### Agent (`agent/agent-config.yaml`)
 
-| Key | Description | Default |
-|-----|-------------|---------|
-| `server_url` | Dashboard server URL | (required) |
-| `api_key` | Shared secret | (required) |
-| `vm_name` | Label for this machine | hostname |
-| `sync_interval` | Seconds between syncs (daemon mode) | `3600` |
-| `cf_access_client_id` | Cloudflare Access service token Client ID | (optional) |
-| `cf_access_client_secret` | Cloudflare Access service token Client Secret | (optional) |
+| Key | Env var | Description | Default |
+|-----|---------|-------------|---------|
+| `server_url` | `CLAUDE_DASHBOARD_SERVER_URL` | Dashboard server URL | (required) |
+| `api_key` | `CLAUDE_DASHBOARD_API_KEY` | Shared secret | (required) |
+| `vm_name` | `CLAUDE_DASHBOARD_VM_NAME` | Label for this machine | hostname |
+| `sync_interval` | — | Seconds between syncs (daemon mode) | `3600` |
+| `cf_access_client_id` | `CF_ACCESS_CLIENT_ID` | Cloudflare Access service token Client ID | (optional) |
+| `cf_access_client_secret` | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access service token Client Secret | (optional) |
 
 ## Agent Commands
 

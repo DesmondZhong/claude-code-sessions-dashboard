@@ -23,7 +23,19 @@ CONFIG_PATH = os.environ.get(
 
 def load_config():
     with open(CONFIG_PATH) as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f) or {}
+    # Environment variables override yaml values
+    env_map = {
+        "CLAUDE_DASHBOARD_API_KEY": "api_key",
+        "CLAUDE_DASHBOARD_HOST": "host",
+        "CLAUDE_DASHBOARD_PORT": "port",
+        "CLAUDE_DASHBOARD_DB_PATH": "db_path",
+    }
+    for env_key, cfg_key in env_map.items():
+        val = os.environ.get(env_key)
+        if val is not None:
+            cfg[cfg_key] = int(val) if cfg_key == "port" else val
+    return cfg
 
 
 def get_db():
