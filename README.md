@@ -30,16 +30,17 @@ Centrally view and manage Claude Code conversations across multiple machines.
 ### 1. Server Setup
 
 ```bash
+# Set up secrets (optional — or set in server-config.yaml)
+cp .env.example .env && vim .env
+
+# Install as a service (installs uv + deps automatically)
 cd server
-pip install -r requirements.txt
+chmod +x install-service.sh
+./install-service.sh
 
-# Edit config — set your API key
-vim server-config.yaml
-
-# Run directly
+# Or run directly for development
+uv venv && uv pip install -r requirements.txt
 python app.py
-
-# Or install as a service (see below)
 ```
 
 Dashboard available at `http://localhost:5050`.
@@ -48,17 +49,16 @@ Dashboard available at `http://localhost:5050`.
 
 ```bash
 cd agent
-pip install -r requirements.txt
 
-# Edit config — set server URL, API key, and machine name
+# Edit config — set server URL and machine name
 vim agent-config.yaml
 
-# Test sync works
-python agent.py --once
-
-# Install as a service (recommended — no cron or tmux needed)
+# Install as a service (installs uv + deps automatically)
 chmod +x install-service.sh
 ./install-service.sh
+
+# Or test manually
+python agent.py --once
 ```
 
 The agent runs in daemon mode as a background service, syncing every hour by default (configurable via `sync_interval` in `agent-config.yaml`). It starts automatically on boot.

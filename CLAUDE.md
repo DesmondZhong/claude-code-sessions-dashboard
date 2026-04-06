@@ -36,10 +36,11 @@ Sessions are stored locally at `~/.claude/`:
 
 ## Development
 
-Dependencies: `flask`, `pyyaml` (server); `requests`, `pyyaml` (agent). No virtual env is set up — install with `pip install -r requirements.txt` in each directory.
+Dependencies managed via `uv` with a shared `.venv/` at project root.
 
-To test locally:
+To set up and test locally:
 ```bash
+uv venv && uv pip install -r server/requirements.txt -r agent/requirements.txt
 cd server && python app.py                    # starts on :5050
 cd agent && python agent.py --once            # sync once to localhost
 ```

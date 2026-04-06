@@ -4,19 +4,29 @@ set -euo pipefail
 # Install claude-sessions-dashboard as a system service (Linux systemd or macOS launchd)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_PY="$SCRIPT_DIR/app.py"
 CONFIG="$SCRIPT_DIR/server-config.yaml"
-# Resolve to absolute path so launchd/systemd work without pyenv/asdf/nvm init
-PYTHON="${PYTHON:-python3}"
-PYTHON="$($PYTHON -c 'import sys; print(sys.executable)')"
+VENV_DIR="$PROJECT_DIR/.venv"
 
 if [ ! -f "$APP_PY" ]; then
     echo "Error: app.py not found at $APP_PY"
     exit 1
 fi
 
-echo "Installing Python dependencies..."
-"$PYTHON" -m pip install -r "$SCRIPT_DIR/requirements.txt" --quiet
+# Install uv if not present
+if ! command -v uv &>/dev/null; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+fi
+
+# Create venv and install deps (uv manages its own Python if needed)
+echo "Setting up Python environment with uv..."
+uv venv "$VENV_DIR" 2>/dev/null || true
+uv pip install -r "$SCRIPT_DIR/requirements.txt" --python "$VENV_DIR/bin/python" --quiet
+
+PYTHON="$VENV_DIR/bin/python"
 
 case "$(uname -s)" in
     Linux)
