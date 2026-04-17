@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code Session Sync Agent — runs on each VM to push sessions to the dashboard server."""
+"""Claude Code Session Sync Client — runs on each VM to push sessions to the dashboard server."""
 
 import argparse
 import json
@@ -21,10 +21,10 @@ try:
 except ImportError:
     pass
 
-DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "agent-config.yaml")
-STATE_DIR = os.path.expanduser("~/.claude-dashboard-agent")
+DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "client-config.yaml")
+STATE_DIR = os.path.expanduser("~/.claude-dashboard-client")
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
-PID_FILE = os.path.join(STATE_DIR, "agent.pid")
+PID_FILE = os.path.join(STATE_DIR, "client.pid")
 CLAUDE_DIR = os.path.expanduser("~/.claude")
 
 # Event used to wake up the daemon for an immediate sync
@@ -326,7 +326,7 @@ def trigger_daemon():
     """Send SIGUSR1 to the running daemon to trigger an immediate sync."""
     pid = read_pid()
     if pid is None:
-        print("No running agent daemon found (no PID file).", file=sys.stderr)
+        print("No running client daemon found (no PID file).", file=sys.stderr)
         sys.exit(1)
     try:
         os.kill(pid, signal.SIGUSR1)
@@ -367,7 +367,7 @@ def run_daemon(config):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Claude Code Session Sync Agent")
+    parser = argparse.ArgumentParser(description="Claude Code Session Sync Client")
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="Path to config file")
     parser.add_argument("--once", action="store_true", help="Sync once and exit")
     parser.add_argument("--daemon", action="store_true", help="Run continuously")

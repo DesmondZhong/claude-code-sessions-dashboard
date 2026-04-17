@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Uninstall claude-sessions agent service
+# Uninstall claude-sessions client service
 
 case "$(uname -s)" in
     Linux)
         echo "Removing systemd service..."
-        sudo systemctl stop claude-dashboard-agent 2>/dev/null || true
-        sudo systemctl disable claude-dashboard-agent 2>/dev/null || true
-        sudo rm -f /etc/systemd/system/claude-dashboard-agent.service
+        sudo systemctl stop claude-dashboard-client 2>/dev/null || true
+        sudo systemctl disable claude-dashboard-client 2>/dev/null || true
+        sudo rm -f /etc/systemd/system/claude-dashboard-client.service
         sudo systemctl daemon-reload
         echo "Done."
         ;;
 
     Darwin)
         echo "Removing launchd service..."
-        PLIST_FILE="$HOME/Library/LaunchAgents/com.claude-dashboard-agent.plist"
+        PLIST_FILE="$HOME/Library/LaunchAgents/com.claude-dashboard-client.plist"
         launchctl unload "$PLIST_FILE" 2>/dev/null || true
         rm -f "$PLIST_FILE"
         echo "Done."

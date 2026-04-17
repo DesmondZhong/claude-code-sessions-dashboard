@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Install claude-sessions agent as a system service (Linux systemd or macOS launchd)
+# Install claude-sessions client as a system service (Linux systemd or macOS launchd)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-AGENT_PY="$SCRIPT_DIR/agent.py"
-CONFIG="$SCRIPT_DIR/agent-config.yaml"
+CLIENT_PY="$SCRIPT_DIR/client.py"
+CONFIG="$SCRIPT_DIR/client-config.yaml"
 VENV_DIR="$PROJECT_DIR/.venv"
 
-if [ ! -f "$AGENT_PY" ]; then
-    echo "Error: agent.py not found at $AGENT_PY"
+if [ ! -f "$CLIENT_PY" ]; then
+    echo "Error: client.py not found at $CLIENT_PY"
     exit 1
 fi
 
 if [ ! -f "$CONFIG" ]; then
-    echo "Error: agent-config.yaml not found. Copy agent-config.yaml and edit it first."
+    echo "Error: client-config.yaml not found. Copy client-config.yaml and edit it first."
     exit 1
 fi
 
@@ -36,17 +36,17 @@ PYTHON="$VENV_DIR/bin/python"
 case "$(uname -s)" in
     Linux)
         echo "Installing systemd service..."
-        SERVICE_FILE="/etc/systemd/system/claude-dashboard-agent.service"
+        SERVICE_FILE="/etc/systemd/system/claude-dashboard-client.service"
         sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
-Description=Claude Sessions Dashboard Agent
+Description=Claude Sessions Dashboard Client
 After=network.target
 
 [Service]
 Type=simple
 User=$(whoami)
 WorkingDirectory=$SCRIPT_DIR
-ExecStart=$PYTHON $AGENT_PY --daemon --config $CONFIG
+ExecStart=$PYTHON $CLIENT_PY --daemon --config $CONFIG
 Restart=on-failure
 RestartSec=10
 
@@ -54,20 +54,20 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
         sudo systemctl daemon-reload
-        sudo systemctl enable claude-dashboard-agent
-        sudo systemctl start claude-dashboard-agent
-        echo "Done! Agent service installed and started."
+        sudo systemctl enable claude-dashboard-client
+        sudo systemctl start claude-dashboard-client
+        echo "Done! Client service installed and started."
         echo ""
         echo "Manage with:"
-        echo "  sudo systemctl status claude-dashboard-agent"
-        echo "  sudo systemctl stop claude-dashboard-agent"
-        echo "  sudo systemctl restart claude-dashboard-agent"
-        echo "  sudo journalctl -u claude-dashboard-agent -f"
+        echo "  sudo systemctl status claude-dashboard-client"
+        echo "  sudo systemctl stop claude-dashboard-client"
+        echo "  sudo systemctl restart claude-dashboard-client"
+        echo "  sudo journalctl -u claude-dashboard-client -f"
         ;;
 
     Darwin)
         echo "Installing launchd service..."
-        PLIST_FILE="$HOME/Library/LaunchAgents/com.claude-dashboard-agent.plist"
+        PLIST_FILE="$HOME/Library/LaunchAgents/com.claude-dashboard-client.plist"
         mkdir -p "$HOME/Library/LaunchAgents"
         cat > "$PLIST_FILE" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -75,11 +75,11 @@ EOF
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.claude-dashboard-agent</string>
+    <string>com.claude-dashboard-client</string>
     <key>ProgramArguments</key>
     <array>
         <string>$PYTHON</string>
-        <string>$AGENT_PY</string>
+        <string>$CLIENT_PY</string>
         <string>--daemon</string>
         <string>--config</string>
         <string>$CONFIG</string>
@@ -91,21 +91,21 @@ EOF
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/claude-dashboard-agent.log</string>
+    <string>/tmp/claude-dashboard-client.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/claude-dashboard-agent.err</string>
+    <string>/tmp/claude-dashboard-client.err</string>
 </dict>
 </plist>
 EOF
         launchctl unload "$PLIST_FILE" 2>/dev/null || true
         launchctl load "$PLIST_FILE"
-        echo "Done! Agent service installed and started."
+        echo "Done! Client service installed and started."
         echo ""
         echo "Manage with:"
-        echo "  launchctl list | grep claude-dashboard-agent"
-        echo "  launchctl stop com.claude-dashboard-agent"
-        echo "  launchctl start com.claude-dashboard-agent"
-        echo "  tail -f /tmp/claude-dashboard-agent.log"
+        echo "  launchctl list | grep claude-dashboard-client"
+        echo "  launchctl stop com.claude-dashboard-client"
+        echo "  launchctl start com.claude-dashboard-client"
+        echo "  tail -f /tmp/claude-dashboard-client.log"
         ;;
 
     *)

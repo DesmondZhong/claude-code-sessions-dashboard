@@ -98,13 +98,20 @@ def init_db():
         )
     """)
     db.execute("""
-        CREATE TABLE IF NOT EXISTS agents (
+        CREATE TABLE IF NOT EXISTS clients (
             vm_name TEXT PRIMARY KEY,
             ip_address TEXT,
             last_sync TEXT,
             session_count INTEGER DEFAULT 0
         )
     """)
+    # Migration: rename old 'agents' table to 'clients' if it exists
+    existing = db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='agents'"
+    ).fetchone()
+    if existing:
+        db.execute("INSERT OR IGNORE INTO clients SELECT * FROM agents")
+        db.execute("DROP TABLE agents")
     db.execute("CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_vm ON sessions(vm_name)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_last_ts ON sessions(last_timestamp DESC)")
@@ -139,12 +146,12 @@ def sync():
     raw_sessions = data.get("raw_sessions", {})
     db = get_db()
 
-    # Record agent heartbeat
+    # Record client heartbeat
     client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if client_ip and "," in client_ip:
         client_ip = client_ip.split(",")[0].strip()
     db.execute("""
-        INSERT INTO agents (vm_name, ip_address, last_sync, session_count)
+        INSERT INTO clients (vm_name, ip_address, last_sync, session_count)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(vm_name) DO UPDATE SET
             ip_address = excluded.ip_address,
@@ -295,13 +302,13 @@ def get_session(session_id):
     })
 
 
-@app.route("/api/agents")
-def list_agents():
+@app.route("/api/clients")
+def list_clients():
     db = get_db()
-    rows = db.execute("SELECT * FROM agents ORDER BY last_sync DESC").fetchall()
+    rows = db.execute("SELECT * FROM clients ORDER BY last_sync DESC").fetchall()
     total_sessions = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
     return jsonify({
-        "agents": [dict(r) for r in rows],
+        "clients": [dict(r) for r in rows],
         "total_sessions": total_sessions,
     })
 
@@ -458,22 +465,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .collapsible-content { display: none; margin-top: 8px; }
   .collapsible.open + .collapsible-content { display: block; }
 
-  /* Agents Panel */
-  .agents-panel { background: var(--surface); border: 1px solid var(--border);
+  /* Clients Panel */
+  .clients-panel { background: var(--surface); border: 1px solid var(--border);
                    border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
-  .agents-header { padding: 10px 16px; cursor: pointer; user-select: none;
+  .clients-header { padding: 10px 16px; cursor: pointer; user-select: none;
                     display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
-  .agents-header:hover { background: var(--hover-overlay); }
-  .agents-header .arrow { font-size: 10px; transition: transform 0.15s; }
-  .agents-header .arrow.open { transform: rotate(90deg); }
-  .agents-header .badge { background: var(--accent); color: #fff; font-size: 11px;
+  .clients-header:hover { background: var(--hover-overlay); }
+  .clients-header .arrow { font-size: 10px; transition: transform 0.15s; }
+  .clients-header .arrow.open { transform: rotate(90deg); }
+  .clients-header .badge { background: var(--accent); color: #fff; font-size: 11px;
                            padding: 1px 8px; border-radius: 10px; font-weight: 600; }
-  .agents-body { display: none; border-top: 1px solid var(--border); }
-  .agents-body.open { display: block; }
-  .agents-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .agents-table th { text-align: left; padding: 8px 16px; color: var(--text-muted);
+  .clients-body { display: none; border-top: 1px solid var(--border); }
+  .clients-body.open { display: block; }
+  .clients-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .clients-table th { text-align: left; padding: 8px 16px; color: var(--text-muted);
                       font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
-  .agents-table td { padding: 8px 16px; border-top: 1px solid var(--border); }
+  .clients-table td { padding: 8px 16px; border-top: 1px solid var(--border); }
   .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
   .status-dot.online { background: #3fb950; }
   .status-dot.stale { background: #d29922; }
@@ -505,16 +512,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 <div class="container">
-  <div class="agents-panel" id="agents-panel">
-    <div class="agents-header" onclick="toggleAgents()">
-      <span class="arrow" id="agents-arrow">&#9654;</span>
-      <span>Connected Agents</span>
-      <span class="badge" id="agents-count">0</span>
+  <div class="clients-panel" id="clients-panel">
+    <div class="clients-header" onclick="toggleClients()">
+      <span class="arrow" id="clients-arrow">&#9654;</span>
+      <span>Connected Clients</span>
+      <span class="badge" id="clients-count">0</span>
     </div>
-    <div class="agents-body" id="agents-body">
-      <table class="agents-table">
-        <thead><tr><th>Status</th><th>Agent</th><th>IP Address</th><th>Sessions</th><th>Last Sync</th></tr></thead>
-        <tbody id="agents-tbody"></tbody>
+    <div class="clients-body" id="clients-body">
+      <table class="clients-table">
+        <thead><tr><th>Status</th><th>Client</th><th>IP Address</th><th>Sessions</th><th>Last Sync</th></tr></thead>
+        <tbody id="clients-tbody"></tbody>
       </table>
     </div>
   </div>
@@ -542,14 +549,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 let allSessions = [];
 let debounceTimer;
 
-function toggleAgents() {
-  const body = document.getElementById('agents-body');
-  const arrow = document.getElementById('agents-arrow');
+function toggleClients() {
+  const body = document.getElementById('clients-body');
+  const arrow = document.getElementById('clients-arrow');
   body.classList.toggle('open');
   arrow.classList.toggle('open');
 }
 
-function agentStatus(lastSync) {
+function clientStatus(lastSync) {
   if (!lastSync) return 'offline';
   const diff = Date.now() - new Date(lastSync).getTime();
   if (diff < 2 * 3600000) return 'online';   // synced within 2h (interval is 1h)
@@ -557,18 +564,18 @@ function agentStatus(lastSync) {
   return 'offline';
 }
 
-async function loadAgents() {
+async function loadClients() {
   try {
-    const res = await fetch('/api/agents');
+    const res = await fetch('/api/clients');
     const data = await res.json();
-    document.getElementById('agents-count').textContent = data.agents.length;
-    const tbody = document.getElementById('agents-tbody');
-    if (!data.agents.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">No agents connected yet</td></tr>';
+    document.getElementById('clients-count').textContent = data.clients.length;
+    const tbody = document.getElementById('clients-tbody');
+    if (!data.clients.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">No clients connected yet</td></tr>';
       return;
     }
-    tbody.innerHTML = data.agents.map(a => {
-      const st = agentStatus(a.last_sync);
+    tbody.innerHTML = data.clients.map(a => {
+      const st = clientStatus(a.last_sync);
       const label = st === 'online' ? 'Online' : st === 'stale' ? 'Stale' : 'Offline';
       return `<tr>
         <td><span class="status-dot ${st}"></span>${label}</td>
@@ -818,7 +825,7 @@ function showList() {
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-function refresh() { loadSessions(); loadAgents(); }
+function refresh() { loadSessions(); loadClients(); }
 
 document.getElementById('search').addEventListener('input', () => {
   clearTimeout(debounceTimer);
@@ -851,7 +858,7 @@ function toggleTheme() {
 
 applyTheme(getTheme());
 loadSessions();
-loadAgents();
+loadClients();
 </script>
 </body>
 </html>"""

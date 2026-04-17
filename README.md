@@ -5,9 +5,9 @@ Centrally view and manage Claude Code conversations across multiple machines.
 ## Architecture
 
 ```
-  Machine A (agent)     Machine B (agent)     Machine C (agent)
+  Machine A (client)    Machine B (client)    Machine C (client)
   ┌──────────┐         ┌──────────┐         ┌──────────┐
-  │ agent.py │         │ agent.py │         │ agent.py │
+  │ client.py│         │ client.py│         │ client.py│
   └────┬─────┘         └────┬─────┘         └────┬─────┘
        │                    │                    │
        │    POST /api/sync  │                    │
@@ -27,7 +27,7 @@ Centrally view and manage Claude Code conversations across multiple machines.
 ```
 
 - **Server** (`server/app.py`) — Flask + SQLite dashboard. Stores parsed sessions in SQLite and raw JSONL backups on disk.
-- **Agent** (`agent/agent.py`) — lightweight sync script on each machine. Reads local `~/.claude/` session files and pushes to the server.
+- **Client** (`client/client.py`) — lightweight sync script on each machine. Reads local `~/.claude/` session files and pushes to the server.
 
 ## Quick Start
 
@@ -49,35 +49,35 @@ python app.py
 
 Dashboard available at `http://localhost:5050`.
 
-### 2. Agent Setup (each machine)
+### 2. Client Setup (each machine)
 
 ```bash
-cd agent
+cd client
 
 # Edit config — set server URL and machine name
-vim agent-config.yaml
+vim client-config.yaml
 
 # Install as a service (installs uv + deps automatically)
 chmod +x install-service.sh
 ./install-service.sh
 
 # Or test manually
-python agent.py --once
+python client.py --once
 ```
 
-The agent runs in daemon mode as a background service, syncing every hour by default (configurable via `sync_interval` in `agent-config.yaml`). It starts automatically on boot.
+The client runs in daemon mode as a background service, syncing every hour by default (configurable via `sync_interval` in `client-config.yaml`). It starts automatically on boot.
 
 To trigger an immediate sync without waiting for the next interval:
 
 ```bash
-python agent.py --trigger
+python client.py --trigger
 ```
 
 This sends a signal to the running daemon, which syncs right away and then resumes its normal schedule.
 
 ## Service Management
 
-Both the server and agent can be installed as persistent services that start on boot. No tmux, screen, or cron needed.
+Both the server and client can be installed as persistent services that start on boot. No tmux, screen, or cron needed.
 
 ### Linux (systemd)
 
@@ -93,16 +93,16 @@ sudo systemctl restart claude-dashboard
 sudo journalctl -u claude-dashboard -f   # view logs
 ```
 
-**Agent (on each machine):**
+**Client (on each machine):**
 ```bash
-cd agent && chmod +x install-service.sh && ./install-service.sh
+cd client && chmod +x install-service.sh && ./install-service.sh
 ```
 
 ```bash
-sudo systemctl status claude-dashboard-agent
-sudo systemctl stop claude-dashboard-agent
-sudo systemctl restart claude-dashboard-agent
-sudo journalctl -u claude-dashboard-agent -f
+sudo systemctl status claude-dashboard-client
+sudo systemctl stop claude-dashboard-client
+sudo systemctl restart claude-dashboard-client
+sudo journalctl -u claude-dashboard-client -f
 ```
 
 Uninstall either with `./uninstall-service.sh` in the respective directory.
@@ -121,16 +121,16 @@ launchctl start com.claude-dashboard
 tail -f /tmp/claude-dashboard.log
 ```
 
-**Agent:**
+**Client:**
 ```bash
-cd agent && chmod +x install-service.sh && ./install-service.sh
+cd client && chmod +x install-service.sh && ./install-service.sh
 ```
 
 ```bash
-launchctl list | grep claude-dashboard-agent
-launchctl stop com.claude-dashboard-agent
-launchctl start com.claude-dashboard-agent
-tail -f /tmp/claude-dashboard-agent.log
+launchctl list | grep claude-dashboard-client
+launchctl stop com.claude-dashboard-client
+launchctl start com.claude-dashboard-client
+tail -f /tmp/claude-dashboard-client.log
 ```
 
 Uninstall either with `./uninstall-service.sh` in the respective directory.
@@ -145,9 +145,9 @@ cd server
 .\install-service.ps1
 ```
 
-**Agent:**
+**Client:**
 ```powershell
-cd agent
+cd client
 .\install-service.ps1
 ```
 
@@ -155,7 +155,7 @@ If [NSSM](https://nssm.cc/) is installed, these create proper Windows services. 
 
 ## Making the Server Reachable Across Machines
 
-Your agents need to reach the server over the network. Options:
+Your clients need to reach the server over the network. Options:
 
 ### Option A: Cloudflare Tunnel (recommended for internet access)
 
@@ -175,25 +175,25 @@ Then configure **Cloudflare Access** to protect the dashboard:
 
 2. **Add an Access policy for browser users** — create a policy with an identity provider (Google, GitHub, email OTP, etc.) so you can log in via the browser.
 
-3. **Create a Service Token for agents** — go to Access → Service Auth → Service Tokens → Create Service Token. Copy the **Client ID** and **Client Secret** (the secret is only shown once).
+3. **Create a Service Token for clients** — go to Access → Service Auth → Service Tokens → Create Service Token. Copy the **Client ID** and **Client Secret** (the secret is only shown once).
 
 4. **Add a Service Token policy** — in your Access application, add a second policy:
    - Action: **Service Auth**
    - Include: **Service Token** → select the token you created
    
-   This lets the agent bypass identity login and authenticate with the token headers instead.
+   This lets the client bypass identity login and authenticate with the token headers instead.
 
-5. **Configure the agent** — add the service token credentials to `agent-config.yaml`:
+5. **Configure the client** — add the service token credentials to `client-config.yaml`:
 
    ```yaml
-   # agent-config.yaml
+   # client-config.yaml
    server_url: "https://sessions.yourdomain.com"
    api_key: "your-shared-secret"
    cf_access_client_id: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.access"
    cf_access_client_secret: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
    ```
 
-   The agent sends these as `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers on every request.
+   The client sends these as `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers on every request.
 
 ### Option B: Tailscale / ZeroTier (private mesh VPN)
 
@@ -203,10 +203,10 @@ If all machines are on Tailscale, the server is reachable via its Tailscale IP (
 
 If machines are on the same network, use the server's LAN IP directly. For machines on different networks, you'll need port forwarding on your router (port 5050).
 
-Set the agent config accordingly:
+Set the client config accordingly:
 
 ```yaml
-# agent-config.yaml
+# client-config.yaml
 server_url: "https://sessions.yourdomain.com"  # Cloudflare Tunnel
 # server_url: "http://100.64.0.1:5050"         # Tailscale
 # server_url: "http://192.168.1.50:5050"        # LAN
@@ -224,14 +224,14 @@ All config values can be overridden with environment variables, so you don't nee
 
 | Key | Env var | Description | Default |
 |-----|---------|-------------|---------|
-| `api_key` | `CLAUDE_DASHBOARD_API_KEY` | Shared secret for agent auth | (required) |
+| `api_key` | `CLAUDE_DASHBOARD_API_KEY` | Shared secret for client auth | (required) |
 | `host` | `CLAUDE_DASHBOARD_HOST` | Bind address | `0.0.0.0` |
 | `port` | `CLAUDE_DASHBOARD_PORT` | Port | `5050` |
 | `db_path` | `CLAUDE_DASHBOARD_DB_PATH` | SQLite database path | `./sessions.db` |
 | `backup_dir` | — | Raw JSONL backup directory | `./backups` |
 | `debug` | — | Flask debug mode | `false` |
 
-### Agent (`agent/agent-config.yaml`)
+### Client (`client/client-config.yaml`)
 
 | Key | Env var | Description | Default |
 |-----|---------|-------------|---------|
@@ -242,13 +242,13 @@ All config values can be overridden with environment variables, so you don't nee
 | `cf_access_client_id` | `CF_ACCESS_CLIENT_ID` | Cloudflare Access service token Client ID | (optional) |
 | `cf_access_client_secret` | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access service token Client Secret | (optional) |
 
-## Agent Commands
+## Client Commands
 
 | Command | Description |
 |---------|-------------|
-| `python agent.py --once` | Sync once and exit |
-| `python agent.py --daemon` | Run continuously (used by the service) |
-| `python agent.py --trigger` | Signal running daemon to sync immediately |
+| `python client.py --once` | Sync once and exit |
+| `python client.py --daemon` | Run continuously (used by the service) |
+| `python client.py --trigger` | Signal running daemon to sync immediately |
 
 ## Local Development / Debug Mode
 
@@ -275,7 +275,7 @@ Debug mode enables:
 
 The web dashboard includes:
 
-- **Agents panel** — expandable section at the top showing all connected agents with their name, IP address, session count, last sync time, and online/stale/offline status
+- **Clients panel** — expandable section at the top showing all connected clients with their name, IP address, session count, last sync time, and online/stale/offline status
 - **Session list** — all sessions across all machines, searchable and filterable by VM or project
 - **Session detail** — click any session to view the full conversation with collapsible tool calls
 - **Message navigation** — sticky sidebar listing all user messages for quick jump-to navigation within a session

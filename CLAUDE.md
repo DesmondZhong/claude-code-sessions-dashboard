@@ -11,9 +11,9 @@ server/
   install-service.sh   # Service installer (Linux systemd / macOS launchd)
   install-service.ps1  # Service installer (Windows NSSM / scheduled task)
   uninstall-service.sh
-agent/
-  agent.py             # Sync agent — discovers local sessions, pushes to server
-  agent-config.yaml    # Agent config (server_url, api_key, vm_name, sync_interval)
+client/
+  client.py            # Sync client — discovers local sessions, pushes to server
+  client-config.yaml   # Client config (server_url, api_key, vm_name, sync_interval)
   install-service.sh   # Service installer (Linux / macOS)
   install-service.ps1  # Service installer (Windows)
   uninstall-service.sh
@@ -23,9 +23,9 @@ agent/
 
 - **Single-file server**: Dashboard HTML/CSS/JS is inlined in `app.py` as `DASHBOARD_HTML`. No frontend build step.
 - **SQLite + raw backups**: Parsed sessions go into SQLite for querying. Raw JSONL files are also saved to `backups/<vm-name>/` for full-fidelity archival.
-- **Agent push model**: Agents POST to the server (not SSH pull), so it works across networks and firewalls.
-- **Incremental sync**: Agent tracks last-synced timestamps in `~/.claude-dashboard-agent/state.json` to avoid re-uploading unchanged sessions.
-- **SIGUSR1 trigger**: Running daemon can be signalled for immediate sync via `agent.py --trigger` (Unix only).
+- **Client push model**: Clients POST to the server (not SSH pull), so it works across networks and firewalls.
+- **Incremental sync**: Client tracks last-synced timestamps in `~/.claude-dashboard-client/state.json` to avoid re-uploading unchanged sessions.
+- **SIGUSR1 trigger**: Running daemon can be signalled for immediate sync via `client.py --trigger` (Unix only).
 
 ## Claude Code Session Format
 
@@ -40,14 +40,14 @@ Dependencies managed via `uv` with a shared `.venv/` at project root.
 
 To set up and test locally:
 ```bash
-uv venv && uv pip install -r server/requirements.txt -r agent/requirements.txt
+uv venv && uv pip install -r server/requirements.txt -r client/requirements.txt
 cd server && python app.py                    # starts on :5050
-cd agent && python agent.py --once            # sync once to localhost
+cd client && python client.py --once          # sync once to localhost
 ```
 
 ## Conventions
 
 - Keep the server as a single `app.py` file. Don't split into multiple modules unless it exceeds ~800 lines.
 - Dashboard UI changes go in the `DASHBOARD_HTML` string in `app.py`.
-- Agent must work on Linux, macOS, and Windows. Avoid Unix-only APIs in core logic (signal handling is gated behind `hasattr(signal, "SIGUSR1")`).
+- Client must work on Linux, macOS, and Windows. Avoid Unix-only APIs in core logic (signal handling is gated behind `hasattr(signal, "SIGUSR1")`).
 - Commit every meaningful change before ending a session. Don't leave work uncommitted.
