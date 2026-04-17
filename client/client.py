@@ -231,11 +231,36 @@ def get_file_mtime(path):
         return ""
 
 
+def default_vm_name():
+    """Pick the most descriptive hostname available.
+
+    On macOS, platform.node() can return a generic "Mac" when launched from
+    launchd. Prefer LocalHostName (the Bonjour name shown in Finder/AirDrop),
+    fall back to platform.node(), strip trailing .local.
+    """
+    if sys.platform == "darwin":
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["scutil", "--get", "LocalHostName"],
+                capture_output=True, text=True, timeout=2,
+            )
+            name = result.stdout.strip()
+            if name:
+                return name
+        except Exception:
+            pass
+    name = platform.node() or "unknown"
+    if name.endswith(".local"):
+        name = name[:-6]
+    return name
+
+
 def sync_to_server(config, sessions, raw_sessions=None):
     """Push sessions to the dashboard server."""
     server_url = config["server_url"].rstrip("/")
     api_key = config.get("api_key", "")
-    vm_name = config.get("vm_name", platform.node())
+    vm_name = config.get("vm_name") or default_vm_name()
 
     headers = {"Content-Type": "application/json"}
     if api_key:
