@@ -263,9 +263,13 @@ def list_sessions():
                     sess["match_snippet"] = snippet
         sessions_out.append(sess)
 
-    # Get distinct VM names and projects for filters
-    vms = [r[0] for r in db.execute("SELECT DISTINCT vm_name FROM sessions ORDER BY vm_name").fetchall()]
-    projects = [r[0] for r in db.execute("SELECT DISTINCT project FROM sessions ORDER BY project").fetchall()]
+    # Get distinct VM names and projects for filters (skip empty/null)
+    vms = [r[0] for r in db.execute(
+        "SELECT DISTINCT vm_name FROM sessions WHERE vm_name != '' AND vm_name IS NOT NULL ORDER BY vm_name"
+    ).fetchall()]
+    projects = [r[0] for r in db.execute(
+        "SELECT DISTINCT project FROM sessions WHERE project != '' AND project IS NOT NULL ORDER BY project"
+    ).fetchall()]
 
     return jsonify({
         "sessions": sessions_out,
