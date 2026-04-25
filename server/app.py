@@ -402,6 +402,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Sessions Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <style>
   :root, [data-theme="dark"] {
     --bg: #0d1117; --surface: #161b22; --border: #30363d;
@@ -440,6 +441,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
              position: sticky; top: 0; z-index: 100; }
   .header h1 { font-size: 18px; font-weight: 600; white-space: nowrap; }
   .header .controls { display: flex; gap: 8px; flex: 1; align-items: center; }
+
+  /* Detail sub-header (sticky under main header, only shown in detail view) */
+  .detail-bar { display: none; align-items: center; gap: 12px;
+                 padding: 8px 24px; background: var(--surface);
+                 border-bottom: 1px solid var(--border);
+                 position: sticky; top: 55px; z-index: 99; }
+  body.detail-active .detail-bar { display: flex; }
+  .detail-bar .back-btn { margin: 0; }
+  .display-mode-toggle { margin-left: auto; display: inline-flex;
+                          border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .display-mode-toggle .mode-btn { border: none; border-radius: 0;
+                                     padding: 5px 12px; background: transparent;
+                                     font-size: 13px; color: var(--text-muted); cursor: pointer; }
+  .display-mode-toggle .mode-btn + .mode-btn { border-left: 1px solid var(--border); }
+  .display-mode-toggle .mode-btn:hover { background: var(--hover-overlay); color: var(--text); }
+  .display-mode-toggle .mode-btn.active { background: var(--accent); color: #fff; }
 
   input, select, button {
     background: var(--bg); border: 1px solid var(--border); color: var(--text);
@@ -529,8 +546,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .session-meta h2 { font-size: 16px; margin-bottom: 8px; }
   .session-meta .meta-row { display: flex; gap: 24px; font-size: 13px; color: var(--text-muted); }
 
-  .msg-nav { width: 260px; flex-shrink: 0; position: sticky; top: 60px;
-             align-self: flex-start; max-height: calc(100vh - 80px); overflow-y: auto; }
+  .msg-nav { width: 260px; flex-shrink: 0; position: sticky; top: 110px;
+             align-self: flex-start; max-height: calc(100vh - 130px); overflow-y: auto; }
   .msg-nav-inner { background: var(--surface); border: 1px solid var(--border);
                     border-radius: 8px; padding: 8px 0; }
   .msg-nav-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
@@ -553,13 +570,39 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .message.tool { background: var(--tool-bg); border-left: 3px solid #8b5cf6; }
   .message .role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
                     color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
-  .message .content { white-space: pre-wrap; word-break: break-word; font-size: 14px; }
+  .message .content { word-break: break-word; font-size: 14px; }
   .message .content code { background: var(--code-bg); padding: 2px 6px;
                             border-radius: 3px; font-size: 13px; }
   .message .content pre { background: var(--pre-bg); padding: 12px;
                            border-radius: 6px; overflow-x: auto; margin: 8px 0; }
-  .message .content pre code { background: none; padding: 0; }
+  .message .content pre code { background: none; padding: 0; font-size: 13px; }
   .message .timestamp { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+  /* Monospace display mode — mimic native Claude Code */
+  .message .content.mono-mode { white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 13px; }
+
+  /* Markdown display mode — rendered prose */
+  .message .content.md-mode { white-space: normal; line-height: 1.55; }
+  .message .content.md-mode > *:first-child { margin-top: 0; }
+  .message .content.md-mode > *:last-child { margin-bottom: 0; }
+  .message .content.md-mode p { margin: 0.5em 0; }
+  .message .content.md-mode ul, .message .content.md-mode ol { margin: 0.5em 0; padding-left: 24px; }
+  .message .content.md-mode li { margin: 0.15em 0; }
+  .message .content.md-mode h1, .message .content.md-mode h2,
+  .message .content.md-mode h3, .message .content.md-mode h4 {
+    font-weight: 600; margin: 0.8em 0 0.3em; line-height: 1.3; }
+  .message .content.md-mode h1 { font-size: 1.4em; }
+  .message .content.md-mode h2 { font-size: 1.25em; }
+  .message .content.md-mode h3 { font-size: 1.1em; }
+  .message .content.md-mode blockquote { border-left: 3px solid var(--border);
+    padding-left: 12px; margin: 0.5em 0; color: var(--text-muted); }
+  .message .content.md-mode a { color: var(--accent); text-decoration: underline; }
+  .message .content.md-mode hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+  .message .content.md-mode table { border-collapse: collapse; margin: 0.5em 0; }
+  .message .content.md-mode th, .message .content.md-mode td {
+    border: 1px solid var(--border); padding: 4px 10px; }
 
   .collapsible { cursor: pointer; user-select: none; }
   .collapsible::before { content: '\\25B6 '; font-size: 10px; }
@@ -618,6 +661,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode"></button>
   </div>
 </div>
+<div class="detail-bar" id="detail-bar">
+  <button class="back-btn" onclick="showList()">&larr; Back to list</button>
+  <div class="display-mode-toggle" role="group" aria-label="Display mode">
+    <button class="mode-btn" data-mode="monospace" onclick="setDisplayMode('monospace')">Monospace</button>
+    <button class="mode-btn" data-mode="markdown" onclick="setDisplayMode('markdown')">Markdown</button>
+  </div>
+</div>
 <div class="container">
   <div class="clients-panel" id="clients-panel">
     <div class="clients-header" onclick="toggleClients()">
@@ -640,7 +690,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
   <div class="detail-view" id="detail-view">
     <div class="detail-main">
-      <button class="back-btn" onclick="showList()">&larr; Back to list</button>
       <div class="session-meta" id="session-meta"></div>
       <div class="messages" id="messages"></div>
     </div>
@@ -955,7 +1004,42 @@ function formatTime(ts) {
   } catch { return ts; }
 }
 
+let currentDetail = null;  // { session, messages, searchTerm }
+let displayMode = localStorage.getItem('displayMode') || 'markdown';
+
+if (typeof marked !== 'undefined') {
+  marked.setOptions({ breaks: true, gfm: true });
+}
+
+function setDisplayMode(mode) {
+  if (mode !== 'monospace' && mode !== 'markdown') return;
+  displayMode = mode;
+  localStorage.setItem('displayMode', mode);
+  updateModeButtons();
+  if (currentDetail) renderDetailMessages(currentDetail);
+}
+
+function updateModeButtons() {
+  document.querySelectorAll('.display-mode-toggle .mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === displayMode);
+  });
+}
+
+function renderContentHTML(text, searchTerm) {
+  if (!text) return { html: '', cls: 'mono-mode' };
+  if (searchTerm) {
+    // Highlight path always uses mono-mode so newlines and whitespace are preserved
+    return { html: highlightMatch(text, searchTerm), cls: 'mono-mode' };
+  }
+  if (displayMode === 'markdown' && typeof marked !== 'undefined') {
+    try { return { html: marked.parse(text), cls: 'md-mode' }; }
+    catch (e) { /* fall through to mono */ }
+  }
+  return { html: esc(text), cls: 'mono-mode' };
+}
+
 async function showDetail(id, searchTerm) {
+  document.body.classList.add('detail-active');
   document.getElementById('list-view').classList.add('hidden');
   const dv = document.getElementById('detail-view');
   dv.classList.add('active');
@@ -974,7 +1058,12 @@ async function showDetail(id, searchTerm) {
       <span>Last active: <strong>${formatTime(s.last_timestamp)}</strong></span>
     </div>`;
 
-  const msgs = data.messages;
+  currentDetail = { session: s, messages: data.messages, searchTerm: searchTerm || null };
+  renderDetailMessages(currentDetail);
+}
+
+function renderDetailMessages(detail) {
+  const { messages: msgs, searchTerm } = detail;
   const termLower = (searchTerm || '').toLowerCase();
   let userMsgIndex = 0;
   let firstHitId = null;
@@ -993,9 +1082,10 @@ async function showDetail(id, searchTerm) {
         ${m.timestamp ? `<div class="timestamp">${formatTime(m.timestamp)}</div>` : ''}
       </div>`;
     }
+    const { html, cls: contentCls } = renderContentHTML(m.content || '', searchTerm);
     return `<div ${idAttr} class="message ${cls}${hitClass}">
       <div class="role">${esc(role)}</div>
-      <div class="content">${searchTerm ? highlightMatch(m.content || '', searchTerm) : renderContent(m.content)}</div>
+      <div class="content ${contentCls}">${html}</div>
       ${m.timestamp ? `<div class="timestamp">${formatTime(m.timestamp)}</div>` : ''}
     </div>`;
   }).join('');
@@ -1009,25 +1099,18 @@ async function showDetail(id, searchTerm) {
     </div>`;
   }).join('');
 
-  // Set up intersection observer for active state
   setupNavObserver();
 
-  // Scroll to first search hit if any
-  if (firstHitId) {
+  // Scroll to first search hit on initial render only (avoid jumping on mode toggle)
+  if (firstHitId && !detail._rendered) {
+    detail._rendered = true;
     requestAnimationFrame(() => {
       const target = document.getElementById(firstHitId);
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
+  } else {
+    detail._rendered = true;
   }
-}
-
-function renderContent(text) {
-  if (!text) return '';
-  let s = esc(text);
-  // Basic code block rendering
-  s = s.replace(/```(\\w*)\\n([\\s\\S]*?)```/g, '<pre><code>$2</code></pre>');
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-  return s;
 }
 
 function scrollToMsg(navItem, index) {
@@ -1059,8 +1142,12 @@ function setupNavObserver() {
 
 function showList() {
   if (navObserver) { navObserver.disconnect(); navObserver = null; }
+  document.body.classList.remove('detail-active');
   document.getElementById('list-view').classList.remove('hidden');
   document.getElementById('detail-view').classList.remove('active');
+  currentDetail = null;
+  // Scroll back to top so list is visible under the sticky header
+  window.scrollTo({ top: 0 });
 }
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -1097,6 +1184,7 @@ function toggleTheme() {
 }
 
 applyTheme(getTheme());
+updateModeButtons();
 loadSessions();
 loadClients();
 </script>
