@@ -8,3 +8,4 @@ __pycache__/
 venv/
 server/backups/
 demo/demo-sessions.db
+.DS_Store

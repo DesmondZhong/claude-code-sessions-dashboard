@@ -1,8 +1,43 @@
 # Claude Sessions Dashboard
 
-Centrally view and manage Claude Code conversations across multiple machines.
+Centrally view and manage Claude Code conversations across every machine you work on — laptops, dev servers, sandboxes — from a single web UI.
 
-See [`demo/`](./demo/) for a live showcase with synthetic data, including a one-click Render deploy.
+## Try it without setting anything up
+
+A static demo with 12 synthetic conversations across 3 machines runs entirely in your browser. No backend, no signup, no cold start.
+
+**[→ Live demo](https://desmondzhong.github.io/claude-sessions-dashboard/)** &nbsp;·&nbsp; or build it yourself: `python demo/build_static.py`
+
+### What you can do
+
+- **See every machine's Claude Code activity in one place.** Sessions are grouped by hostname and sorted by recency. Collapse the groups you don't care about right now.
+- **Read conversations the way you'd read a doc.** Toggle between *Markdown* (rendered prose, headings, code blocks, lists, tables) and *Monospace* (the native Claude Code feel). Your choice persists.
+- **Jump around long sessions instantly.** A sticky sidebar lists every user message — click to scroll, with an active-position indicator that follows you. The demo's 19-prompt "build-task-queue" session shows it off.
+- **Full-text search across every conversation.** Type a keyword; matches appear with surrounding-context snippets, and clicking through scrolls you straight to the highlighted hit inside the session.
+- **Filter by VM or project,** or combine filters with a search query.
+- **Custom session titles** from Claude Code's `/rename` come through and appear bolded in the list.
+- **Tool calls stay out of the way.** Read / Edit / Bash / Grep / WebSearch / WebFetch / Task subagent invocations are collapsed by default — expand on demand.
+- **Light + dark themes** (auto-follows your OS, toggle in the header).
+- **Connected-clients panel** shows which machines are syncing, their IPs, session counts, and online/stale/offline status.
+
+In your own deployment you also get:
+
+- **Move sessions between groups** with a dropdown (or rename / merge clients) — useful after re-imaging a machine or renaming a hostname.
+- **Incremental sync** from each client (every hour by default; manually trigger with `client.py --trigger`). Only changed sessions are pushed.
+- **Raw JSONL backups** in addition to the SQLite store, preserving the original Claude Code session format.
+- **Cloudflare Access** support for protecting the dashboard while letting your clients in via service tokens.
+
+### Screenshots
+
+<!-- Replace these placeholders after running `python demo/build_static.py`
+     and capturing screenshots from the static demo. -->
+
+| | |
+|---|---|
+| ![Session list grouped by VM](docs/screenshots/01-session-list.png) | ![Session detail with markdown + nav sidebar](docs/screenshots/02-session-detail.png) |
+| *Every machine's sessions in one place, grouped by hostname.* | *Reading a session — rendered markdown, sticky controls, one-click navigation between user prompts.* |
+| ![Full-text search with snippets](docs/screenshots/03-search.png) | ![Mode toggle: monospace vs markdown](docs/screenshots/04-mode-toggle.png) |
+| *Search surfaces matching snippets across every conversation.* | *Same content in monospace (left) and markdown (right) — pick whichever reads better.* |
 
 ## Architecture
 

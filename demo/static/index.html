@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Sessions Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<style>
+  :root, [data-theme="dark"] {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff;
+    --accent-hover: #79c0ff; --user-bg: #1c2333; --assistant-bg: #121820;
+    --system-bg: #1a1412; --tool-bg: #12191a;
+    --code-bg: rgba(110,118,129,0.2); --pre-bg: rgba(110,118,129,0.15);
+    --hover-overlay: rgba(255,255,255,0.03);
+  }
+  [data-theme="light"] {
+    --bg: #f6f8fa; --surface: #ffffff; --border: #d0d7de;
+    --text: #1f2328; --text-muted: #656d76; --accent: #0969da;
+    --accent-hover: #0550ae; --user-bg: #ddf4ff; --assistant-bg: #dafbe1;
+    --system-bg: #fff8c5; --tool-bg: #f0e8ff;
+    --code-bg: rgba(175,184,193,0.2); --pre-bg: rgba(175,184,193,0.15);
+    --hover-overlay: rgba(0,0,0,0.03);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f8fa; --surface: #ffffff; --border: #d0d7de;
+      --text: #1f2328; --text-muted: #656d76; --accent: #0969da;
+      --accent-hover: #0550ae; --user-bg: #ddf4ff; --assistant-bg: #dafbe1;
+      --system-bg: #fff8c5; --tool-bg: #f0e8ff;
+      --code-bg: rgba(175,184,193,0.2); --pre-bg: rgba(175,184,193,0.15);
+      --hover-overlay: rgba(0,0,0,0.03);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--text); line-height: 1.5; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-hover); }
+
+  .header { background: var(--surface); border-bottom: 1px solid var(--border);
+             padding: 12px 24px; display: flex; align-items: center; gap: 16px;
+             position: sticky; top: 0; z-index: 100; }
+  .header h1 { font-size: 18px; font-weight: 600; white-space: nowrap; }
+  .header .controls { display: flex; gap: 8px; flex: 1; align-items: center; }
+
+  /* Detail sub-header (sticky under main header, only shown in detail view) */
+  .detail-bar { display: none; align-items: center; gap: 12px;
+                 padding: 8px 24px; background: var(--surface);
+                 border-bottom: 1px solid var(--border);
+                 position: sticky; top: 55px; z-index: 99; }
+  body.detail-active .detail-bar { display: flex; }
+  .detail-bar .back-btn { margin: 0; }
+  .display-mode-toggle { margin-left: auto; display: inline-flex;
+                          border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .display-mode-toggle .mode-btn { border: none; border-radius: 0;
+                                     padding: 5px 12px; background: transparent;
+                                     font-size: 13px; color: var(--text-muted); cursor: pointer; }
+  .display-mode-toggle .mode-btn + .mode-btn { border-left: 1px solid var(--border); }
+  .display-mode-toggle .mode-btn:hover { background: var(--hover-overlay); color: var(--text); }
+  .display-mode-toggle .mode-btn.active { background: var(--accent); color: #fff; }
+
+  input, select, button {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 12px; border-radius: 6px; font-size: 14px;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  button { cursor: pointer; background: var(--surface); }
+  button:hover { border-color: var(--accent); }
+  .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-theme { font-size: 16px; padding: 4px 10px; line-height: 1; }
+
+  .search-input { flex: 1; min-width: 200px; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 16px 24px; }
+
+  /* Session List */
+  .session-list { display: flex; flex-direction: column; gap: 12px; }
+  .vm-group { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .vm-group-header { padding: 10px 16px; cursor: pointer; user-select: none;
+                      display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
+  .vm-group-header:hover { background: var(--hover-overlay); }
+  .vm-group-header .arrow { font-size: 10px; transition: transform 0.15s; }
+  .vm-group-header .arrow.open { transform: rotate(90deg); }
+  .vm-group-header .vm-name { color: var(--accent); font-weight: 600; }
+  .vm-group-header .vm-count { color: var(--text-muted); font-size: 12px; }
+  .vm-group-body { display: none; border-top: 1px solid var(--border); }
+  .vm-group-body.open { display: block; }
+  .session-row {
+    display: grid; grid-template-columns: 200px 1fr 80px 160px;
+    gap: 12px; padding: 10px 16px;
+    cursor: pointer; align-items: center;
+    border-bottom: 1px solid var(--border); transition: background 0.1s;
+  }
+  .session-row:last-child { border-bottom: none; }
+  .session-row:hover { background: var(--hover-overlay); }
+  .session-row .project { color: var(--text-muted); font-size: 13px;
+                           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-row .summary { font-size: 14px; overflow: hidden;
+                           text-overflow: ellipsis; white-space: nowrap; }
+  .session-row .count { color: var(--text-muted); font-size: 13px; text-align: center; }
+  .session-row .time { color: var(--text-muted); font-size: 13px; text-align: right; }
+  .session-row { position: relative; }
+  .session-row .move-btn { position: absolute; right: 8px; top: 8px;
+                            opacity: 0; font-size: 11px; padding: 2px 8px;
+                            background: var(--surface); border: 1px solid var(--border);
+                            color: var(--text-muted); border-radius: 4px; cursor: pointer;
+                            transition: opacity 0.15s; }
+  .session-row:hover .move-btn { opacity: 1; }
+  .session-row .move-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+                    display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border);
+           border-radius: 8px; padding: 20px; min-width: 360px; max-width: 90vw; }
+  .modal h3 { font-size: 16px; margin-bottom: 12px; }
+  .modal label { display: block; font-size: 13px; color: var(--text-muted);
+                  margin-bottom: 4px; }
+  .modal select, .modal input[type="text"] { width: 100%; margin-bottom: 12px; }
+  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal .actions button { padding: 6px 14px; }
+  .session-row .snippet { grid-column: 1 / -1; font-size: 12px; color: var(--text-muted);
+                           padding-top: 6px; border-top: 1px dashed var(--border); margin-top: 4px;
+                           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session-row .snippet mark { background: rgba(255,215,0,0.35); color: inherit;
+                                padding: 1px 2px; border-radius: 2px; }
+  .message mark { background: rgba(255,215,0,0.35); color: inherit;
+                   padding: 1px 2px; border-radius: 2px; }
+  .message.search-hit { box-shadow: 0 0 0 2px var(--accent); }
+
+  .list-header { display: grid; grid-template-columns: 200px 1fr 80px 160px;
+                  gap: 12px; padding: 8px 16px; font-size: 12px;
+                  color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Session Detail */
+  .detail-view { display: none; }
+  .detail-view.active { display: flex; gap: 16px; }
+  .list-view.hidden { display: none; }
+
+  .back-btn { margin-bottom: 16px; }
+
+  .detail-main { flex: 1; min-width: 0; }
+  .session-meta { background: var(--surface); padding: 16px; border-radius: 8px;
+                   margin-bottom: 16px; border: 1px solid var(--border); }
+  .session-meta h2 { font-size: 16px; margin-bottom: 8px; }
+  .session-meta .meta-row { display: flex; gap: 24px; font-size: 13px; color: var(--text-muted); }
+
+  .msg-nav { width: 260px; flex-shrink: 0; position: sticky; top: 110px;
+             align-self: flex-start; max-height: calc(100vh - 130px); overflow-y: auto; }
+  .msg-nav-inner { background: var(--surface); border: 1px solid var(--border);
+                    border-radius: 8px; padding: 8px 0; }
+  .msg-nav-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+                    color: var(--text-muted); padding: 4px 12px 8px; font-weight: 600; }
+  .msg-nav-item { display: block; padding: 6px 12px; font-size: 13px; cursor: pointer;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                   color: var(--text); border-left: 2px solid transparent;
+                   transition: background 0.1s, border-color 0.1s; }
+  .msg-nav-item:hover { background: var(--hover-overlay); }
+  .msg-nav-item.active { border-left-color: var(--accent); background: var(--hover-overlay);
+                          color: var(--accent); }
+  .msg-nav-item .nav-index { color: var(--text-muted); font-size: 11px; margin-right: 4px; }
+
+  .messages { display: flex; flex-direction: column; gap: 8px; }
+  .message { padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); }
+  .message.user { background: var(--user-bg); border-left: 3px solid var(--accent); }
+  .message.assistant { background: var(--assistant-bg); border-left: 3px solid #3fb950; }
+  .message.system { background: var(--system-bg); border-left: 3px solid #d29922;
+                     font-size: 13px; color: var(--text-muted); }
+  .message.tool { background: var(--tool-bg); border-left: 3px solid #8b5cf6; }
+  .message .role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+                    color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+  .message .content { word-break: break-word; font-size: 14px; }
+  .message .content code { background: var(--code-bg); padding: 2px 6px;
+                            border-radius: 3px; font-size: 13px; }
+  .message .content pre { background: var(--pre-bg); padding: 12px;
+                           border-radius: 6px; overflow-x: auto; margin: 8px 0; }
+  .message .content pre code { background: none; padding: 0; font-size: 13px; }
+  .message .timestamp { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+  /* Monospace display mode — mimic native Claude Code */
+  .message .content.mono-mode { white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 13px; }
+
+  /* Markdown display mode — rendered prose */
+  .message .content.md-mode { white-space: normal; line-height: 1.55; }
+  .message .content.md-mode > *:first-child { margin-top: 0; }
+  .message .content.md-mode > *:last-child { margin-bottom: 0; }
+  .message .content.md-mode p { margin: 0.5em 0; }
+  .message .content.md-mode ul, .message .content.md-mode ol { margin: 0.5em 0; padding-left: 24px; }
+  .message .content.md-mode li { margin: 0.15em 0; }
+  .message .content.md-mode h1, .message .content.md-mode h2,
+  .message .content.md-mode h3, .message .content.md-mode h4 {
+    font-weight: 600; margin: 0.8em 0 0.3em; line-height: 1.3; }
+  .message .content.md-mode h1 { font-size: 1.4em; }
+  .message .content.md-mode h2 { font-size: 1.25em; }
+  .message .content.md-mode h3 { font-size: 1.1em; }
+  .message .content.md-mode blockquote { border-left: 3px solid var(--border);
+    padding-left: 12px; margin: 0.5em 0; color: var(--text-muted); }
+  .message .content.md-mode a { color: var(--accent); text-decoration: underline; }
+  .message .content.md-mode hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+  .message .content.md-mode table { border-collapse: collapse; margin: 0.5em 0; }
+  .message .content.md-mode th, .message .content.md-mode td {
+    border: 1px solid var(--border); padding: 4px 10px; }
+
+  .collapsible { cursor: pointer; user-select: none; }
+  .collapsible::before { content: '\25B6 '; font-size: 10px; }
+  .collapsible.open::before { content: '\25BC '; }
+  .collapsible-content { display: none; margin-top: 8px; }
+  .collapsible.open + .collapsible-content { display: block; }
+
+  /* Clients Panel */
+  .clients-panel { background: var(--surface); border: 1px solid var(--border);
+                   border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+  .clients-header { padding: 10px 16px; cursor: pointer; user-select: none;
+                    display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
+  .clients-header:hover { background: var(--hover-overlay); }
+  .clients-header .arrow { font-size: 10px; transition: transform 0.15s; }
+  .clients-header .arrow.open { transform: rotate(90deg); }
+  .clients-header .badge { background: var(--accent); color: #fff; font-size: 11px;
+                           padding: 1px 8px; border-radius: 10px; font-weight: 600; }
+  .clients-body { display: none; border-top: 1px solid var(--border); }
+  .clients-body.open { display: block; }
+  .clients-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .clients-table th { text-align: left; padding: 8px 16px; color: var(--text-muted);
+                      font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+  .clients-table td { padding: 8px 16px; border-top: 1px solid var(--border); }
+  .client-actions { text-align: right; white-space: nowrap; }
+  .client-action { font-size: 12px; padding: 3px 8px; margin-left: 4px;
+                    background: var(--bg); border: 1px solid var(--border);
+                    color: var(--text-muted); border-radius: 4px; cursor: pointer; }
+  .client-action:hover { color: var(--accent); border-color: var(--accent); }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .status-dot.online { background: #3fb950; }
+  .status-dot.stale { background: #d29922; }
+  .status-dot.offline { background: #f85149; }
+
+  .empty { text-align: center; padding: 48px; color: var(--text-muted); }
+  .loading { text-align: center; padding: 48px; color: var(--text-muted); }
+
+  @media (max-width: 768px) {
+    .session-row { grid-template-columns: 1fr; gap: 4px; }
+    .list-header { display: none; }
+    .session-row .time, .session-row .count { text-align: left; }
+    .header { flex-wrap: wrap; }
+    .header .controls { flex-wrap: wrap; }
+    .msg-nav { display: none; }
+    .detail-view.active { display: block; }
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Claude Sessions</h1>
+  <div class="controls">
+    <input class="search-input" type="text" id="search" placeholder="Search sessions...">
+    <select id="vm-filter"><option value="">All VMs</option></select>
+    <select id="project-filter"><option value="">All Projects</option></select>
+    <button class="btn-primary" onclick="refresh()">Refresh</button>
+    <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode"></button>
+  </div>
+</div>
+<div class="detail-bar" id="detail-bar">
+  <button class="back-btn" onclick="showList()">&larr; Back to list</button>
+  <div class="display-mode-toggle" role="group" aria-label="Display mode">
+    <button class="mode-btn" data-mode="monospace" onclick="setDisplayMode('monospace')">Monospace</button>
+    <button class="mode-btn" data-mode="markdown" onclick="setDisplayMode('markdown')">Markdown</button>
+  </div>
+</div>
+<div class="container">
+  <div class="clients-panel" id="clients-panel">
+    <div class="clients-header" onclick="toggleClients()">
+      <span class="arrow" id="clients-arrow">&#9654;</span>
+      <span>Connected Clients</span>
+      <span class="badge" id="clients-count">0</span>
+    </div>
+    <div class="clients-body" id="clients-body">
+      <table class="clients-table">
+        <thead><tr><th>Status</th><th>Client</th><th>IP Address</th><th>Sessions</th><th>Last Sync</th><th></th></tr></thead>
+        <tbody id="clients-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="list-view" id="list-view">
+    <div class="list-header">
+      <span>Project</span><span>Summary</span><span>Messages</span><span>Last Active</span>
+    </div>
+    <div class="session-list" id="session-list"></div>
+  </div>
+  <div class="detail-view" id="detail-view">
+    <div class="detail-main">
+      <div class="session-meta" id="session-meta"></div>
+      <div class="messages" id="messages"></div>
+    </div>
+    <nav class="msg-nav" id="msg-nav">
+      <div class="msg-nav-inner">
+        <div class="msg-nav-title">User Messages</div>
+        <div id="msg-nav-list"></div>
+      </div>
+    </nav>
+  </div>
+</div>
+
+<!-- Move Session Modal -->
+<div class="modal-overlay" id="move-modal" onclick="if (event.target === this) closeMoveModal()">
+  <div class="modal">
+    <h3>Move session to group</h3>
+    <label for="move-select">Target group</label>
+    <select id="move-select"></select>
+    <div id="move-new-wrap" style="display:none">
+      <label for="move-new-input">New group name</label>
+      <input type="text" id="move-new-input" placeholder="e.g. work-laptop">
+    </div>
+    <div class="actions">
+      <button onclick="closeMoveModal()">Cancel</button>
+      <button class="btn-primary" onclick="confirmMove()">Move</button>
+    </div>
+  </div>
+</div>
+
+<style id="static-mode-style">
+  /* Hide write-action UI in the static demo */
+  .static-mode .client-actions,
+  .static-mode .session-row .move-btn { display: none !important; }
+  .static-mode .demo-banner {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    color: var(--text-muted); font-size: 13px; padding: 6px 24px; text-align: center;
+  }
+  .static-mode .demo-banner a { color: var(--accent); }
+</style>
+<script id="static-data">
+window.STATIC_DATA = {"clients": [{"ip_address": "10.0.1.5", "last_sync": "2026-04-23T11:00:00+00:00", "session_count": 5, "vm_name": "macbook-pro"}, {"ip_address": "192.168.1.100", "last_sync": "2026-04-23T10:00:00+00:00", "session_count": 4, "vm_name": "dev-server"}, {"ip_address": "172.20.0.3", "last_sync": "2026-04-23T09:00:00+00:00", "session_count": 3, "vm_name": "sandbox"}], "sessions": [{"custom_title": "", "first_timestamp": "2026-04-23T10:15:00+00:00", "id": "s-type-hints-0001", "last_timestamp": "2026-04-23T10:19:00+00:00", "message_count": 3, "project": "/Users/demo/projects/webapp", "summary": "Add type hints to the User API signatures", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "macbook-pro"}, {"custom_title": "", "first_timestamp": "2026-04-22T14:30:00+00:00", "id": "s-css-grid-0002", "last_timestamp": "2026-04-22T14:55:00+00:00", "message_count": 5, "project": "/Users/demo/projects/webapp", "summary": "The CSS grid layout is broken on mobile — columns overflow", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "macbook-pro"}, {"custom_title": "", "first_timestamp": "2026-04-21T16:00:00+00:00", "id": "s-auth-research-0003", "last_timestamp": "2026-04-21T16:10:00+00:00", "message_count": 4, "project": "/Users/demo/projects/webapp", "summary": "Research current best practices for JWT vs session auth", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "macbook-pro"}, {"custom_title": "async-race-condition", "first_timestamp": "2026-04-20T09:30:00+00:00", "id": "s-async-fix-0004", "last_timestamp": "2026-04-20T09:40:00+00:00", "message_count": 6, "project": "/Users/demo/projects/data-pipeline", "summary": "Intermittent test failure in the ingestion pipeline", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "macbook-pro"}, {"custom_title": "", "first_timestamp": "2026-04-19T11:00:00+00:00", "id": "s-react-patterns-0005", "last_timestamp": "2026-04-19T11:06:00+00:00", "message_count": 3, "project": "/Users/demo/projects/webapp", "summary": "Find modern React performance patterns for our dashboard", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "macbook-pro"}, {"custom_title": "build-task-queue", "first_timestamp": "2026-04-18T09:00:00+00:00", "id": "s-task-queue-0006", "last_timestamp": "2026-04-18T11:11:00+00:00", "message_count": 19, "project": "/opt/projects/taskq", "summary": "I want to build a simple distributed task queue in Python using Redis", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "dev-server"}, {"custom_title": "", "first_timestamp": "2026-04-17T14:00:00+00:00", "id": "s-db-migration-0007", "last_timestamp": "2026-04-17T14:12:00+00:00", "message_count": 6, "project": "/opt/projects/api-gateway", "summary": "Review migration 0042_add_indexes.sql before applying to prod", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "dev-server"}, {"custom_title": "", "first_timestamp": "2026-04-16T15:00:00+00:00", "id": "s-nginx-config-0008", "last_timestamp": "2026-04-16T15:05:00+00:00", "message_count": 3, "project": "/etc/nginx", "summary": "Explain the nginx reverse-proxy config for our API", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "dev-server"}, {"custom_title": "", "first_timestamp": "2026-04-15T13:00:00+00:00", "id": "s-git-merge-0009", "last_timestamp": "2026-04-15T13:13:00+00:00", "message_count": 5, "project": "/opt/projects/api-gateway", "summary": "Resolve merge conflicts from the refactor branch", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "dev-server"}, {"custom_title": "", "first_timestamp": "2026-04-14T18:00:00+00:00", "id": "s-regex-help-0010", "last_timestamp": "2026-04-14T18:05:00+00:00", "message_count": 3, "project": "/home/demo/scratch", "summary": "Regex to validate email addresses — what's reasonable?", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "sandbox"}, {"custom_title": "", "first_timestamp": "2026-04-13T10:30:00+00:00", "id": "s-docker-debug-0011", "last_timestamp": "2026-04-13T10:45:00+00:00", "message_count": 4, "project": "/home/demo/projects/docker-lab", "summary": "Container can't reach postgres on the same docker network", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "sandbox"}, {"custom_title": "", "first_timestamp": "2026-04-12T16:00:00+00:00", "id": "s-api-design-0012", "last_timestamp": "2026-04-12T16:13:00+00:00", "message_count": 4, "project": "/home/demo/projects/api-design-doc", "summary": "Review REST vs GraphQL tradeoff for mobile app backend", "updated_at": "2026-04-23T03:36:28.294328+00:00", "vm_name": "sandbox"}], "messages": {"s-type-hints-0001": [{"content": "Can you add type hints to the functions in api/users.py? I want to catch bugs earlier.", "message_type": "user", "role": "user", "timestamp": "2026-04-23T10:15:00+00:00"}, {"content": "Tool: Read(api/users.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-23T10:15:00+00:00"}, {"content": "def get_user(id):\n    ...\n\ndef create_user(data):\n    ...\n\ndef list_users(filters=None, limit=50):\n    ...", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-23T10:16:00+00:00"}, {"content": "Here's what I found. Let me add type hints with proper return types and optional parameters.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-23T10:16:00+00:00"}, {"content": "Tool: Edit(api/users.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-23T10:16:00+00:00"}, {"content": "Updated 3 functions with type annotations.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-23T10:17:00+00:00"}, {"content": "Added:\n```python\ndef get_user(id: int) -> User | None: ...\ndef create_user(data: UserCreate) -> User: ...\ndef list_users(filters: UserFilter | None = None, limit: int = 50) -> list[User]: ...\n```\n\nThe `User | None` syntax requires Python 3.10+. Let me know if you need the older `Optional[User]` form.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-23T10:17:00+00:00"}, {"content": "3.10+ is fine. Does mypy pass now?", "message_type": "user", "role": "user", "timestamp": "2026-04-23T10:18:00+00:00"}, {"content": "Tool: Bash(mypy api/users.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-23T10:18:00+00:00"}, {"content": "Success: no issues found in 1 source file", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-23T10:18:00+00:00"}, {"content": "Clean. No mypy errors.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-23T10:19:00+00:00"}, {"content": "Perfect, thanks.", "message_type": "user", "role": "user", "timestamp": "2026-04-23T10:19:00+00:00"}], "s-css-grid-0002": [{"content": "The CSS grid layout is broken on mobile. Columns overflow the viewport. Can you take a look?", "message_type": "user", "role": "user", "timestamp": "2026-04-22T14:30:00+00:00"}, {"content": "Tool: Grep(grid-template-columns)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-22T14:30:00+00:00"}, {"content": "src/styles/layout.css:23:  grid-template-columns: 280px 1fr 200px;\nsrc/styles/cards.css:12:  grid-template-columns: repeat(3, 1fr);", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-22T14:30:00+00:00"}, {"content": "Tool: Read(src/styles/layout.css)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-22T14:31:00+00:00"}, {"content": ".container {\n  display: grid;\n  grid-template-columns: 280px 1fr 200px;\n  gap: 16px;\n}\n\n@media (max-width: 768px) {\n  .container {\n    grid-template-columns: 1fr;\n  }\n}", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-22T14:31:00+00:00"}, {"content": "The layout.css media query looks correct for the container. Let me check cards.css — that's the one with `repeat(3, 1fr)` which could overflow on narrow viewports.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-22T14:31:00+00:00"}, {"content": "Yes that's probably it, we have a card grid inside.", "message_type": "user", "role": "user", "timestamp": "2026-04-22T14:32:00+00:00"}, {"content": "Tool: Read(src/styles/cards.css)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-22T14:32:00+00:00"}, {"content": ".card-grid {\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 12px;\n}", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-22T14:32:00+00:00"}, {"content": "Found it. `repeat(3, 1fr)` forces 3 equal columns regardless of viewport. On narrow screens each column gets <100px and content overflows. The fix is `auto-fit` with a minimum:", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-22T14:33:00+00:00"}, {"content": "Tool: Edit(src/styles/cards.css)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-22T14:33:00+00:00"}, {"content": "Changed grid-template-columns to `repeat(auto-fit, minmax(240px, 1fr))`.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-22T14:33:00+00:00"}, {"content": "Now columns collapse to 2 or 1 automatically based on available width, with a 240px minimum per card.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-22T14:34:00+00:00"}, {"content": "That worked. But now there's still a bit of horizontal scroll. Could be padding?", "message_type": "user", "role": "user", "timestamp": "2026-04-22T14:45:00+00:00"}, {"content": "Tool: Grep(padding-right|padding-left)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-22T14:45:00+00:00"}, {"content": "src/styles/layout.css:15:  padding-left: 24px;\nsrc/styles/layout.css:16:  padding-right: 24px;", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-22T14:45:00+00:00"}, {"content": "The container has fixed 24px left/right padding. Combined with `width: 100%` this causes overflow. Switching to `box-sizing: border-box` (or using `padding-inline`) will fix it.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-22T14:46:00+00:00"}, {"content": "Apply box-sizing globally please.", "message_type": "user", "role": "user", "timestamp": "2026-04-22T14:47:00+00:00"}, {"content": "Tool: Edit(src/styles/layout.css)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-22T14:47:00+00:00"}, {"content": "Added `*, *::before, *::after { box-sizing: border-box; }` at top of file.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-22T14:47:00+00:00"}, {"content": "Done. Horizontal scroll should be gone now.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-22T14:48:00+00:00"}, {"content": "Confirmed, thanks!", "message_type": "user", "role": "user", "timestamp": "2026-04-22T14:55:00+00:00"}], "s-auth-research-0003": [{"content": "I'm redesigning our auth system. Can you research the current best practices between JWT and session-based auth for SPAs in 2026?", "message_type": "user", "role": "user", "timestamp": "2026-04-21T16:00:00+00:00"}, {"content": "This is a research-heavy question — let me delegate to a research subagent so I can keep the main context focused.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-21T16:00:00+00:00"}, {"content": "Tool: Task(subagent_type=Explore, prompt=Research JWT vs session auth for SPAs in 2026 — cover security, UX, and scaling trade-offs. Report in under 400 words.)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-21T16:00:00+00:00"}, {"content": "(subagent) Summary:\n• JWTs excel at stateless APIs and microservices where session stores are a bottleneck.\n• Session cookies (HTTP-only, Secure, SameSite=Lax) are recommended by OWASP for browser-facing SPAs — safer against XSS leaks of tokens and simpler to revoke.\n• Common modern pattern: session cookies for browser clients + short-lived JWTs for service-to-service.\n• Revocation: JWTs need blacklist/rotation; sessions just delete the row.\n• Refresh tokens in httpOnly cookie + access token in memory is a compromise.\nSources: OWASP ASVS 4.0.3, Auth0 engineering blog 2025, PortSwigger.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-21T16:02:00+00:00"}, {"content": "Here's the subagent's summary:\n\n**Short answer:** For a browser SPA, prefer session cookies (httpOnly, Secure, SameSite=Lax). Use JWT only for service-to-service or stateless APIs.\n\n**Key trade-offs:**\n- **Revocation**: sessions = delete a row; JWTs = need blacklist or short TTL + rotation.\n- **XSS exposure**: httpOnly cookie isn't readable by JS; localStorage-stored JWT is.\n- **Scaling**: JWTs avoid a session store, but a Redis-backed session store is fine to ~100k rps.\n\n**Modern hybrid**: Session cookie for the browser ↔ API edge; short-lived JWT between your services internally.\n\nOWASP ASVS 4.0.3 still recommends session cookies for browser-facing apps.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-21T16:03:00+00:00"}, {"content": "Makes sense. What about refresh token rotation specifically?", "message_type": "user", "role": "user", "timestamp": "2026-04-21T16:05:00+00:00"}, {"content": "Tool: WebSearch(refresh token rotation best practice 2026)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-21T16:05:00+00:00"}, {"content": "Top result: \"Refresh Token Rotation\" (auth0.com/docs). Summary: issue a new refresh token on every use; invalidate the old one; detect reuse as breach signal.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-21T16:05:00+00:00"}, {"content": "The accepted pattern:\n\n1. Every refresh returns a new `refresh_token` (+ new `access_token`).\n2. The old refresh is invalidated immediately.\n3. If an invalidated token is used again → treat as stolen, revoke the entire token family.\n4. Store refresh in httpOnly cookie; access in memory (never localStorage).\n\nAuth0, Okta, and AWS Cognito all default to this.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-21T16:06:00+00:00"}, {"content": "Great. Can you draft a minimal implementation plan?", "message_type": "user", "role": "user", "timestamp": "2026-04-21T16:08:00+00:00"}, {"content": "Sure. Here's a pragmatic plan:\n\n**Phase 1 — Sessions for the browser**\n- `POST /login` → sets `session_id` cookie (httpOnly, Secure, SameSite=Lax, 24h)\n- Redis session store, keyed by session_id → `{user_id, created_at, device}`\n- `POST /logout` → deletes the Redis row + clears cookie\n\n**Phase 2 — Internal JWTs**\n- Sign short-lived (5m) JWTs with the user_id claim for service-to-service calls.\n- Rotate signing key quarterly.\n\n**Phase 3 — Refresh tokens (only if you need long-lived sessions)**\n- `refresh_token` in a separate httpOnly cookie, 30-day TTL.\n- Rotate on every use, detect reuse, revoke family on breach.\n\nWant me to scaffold the session store module first?", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-21T16:09:00+00:00"}, {"content": "Yes, but later. Saving this plan for now.", "message_type": "user", "role": "user", "timestamp": "2026-04-21T16:10:00+00:00"}], "s-async-fix-0004": [{"content": "The ingestion tests are flaky — they pass locally but fail on CI ~30% of the time. Always the same test: `test_parallel_ingest`.", "message_type": "user", "role": "user", "timestamp": "2026-04-20T09:30:00+00:00"}, {"content": "Tool: Read(tests/test_ingest.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-20T09:30:00+00:00"}, {"content": "async def test_parallel_ingest():\n    pipeline = Pipeline()\n    tasks = [pipeline.ingest(f'batch-{i}') for i in range(10)]\n    results = await asyncio.gather(*tasks)\n    assert pipeline.total_count == 10\n    assert all(r.status == 'ok' for r in results)", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-20T09:30:00+00:00"}, {"content": "Tool: Read(src/pipeline.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-20T09:31:00+00:00"}, {"content": "class Pipeline:\n    def __init__(self):\n        self.total_count = 0\n\n    async def ingest(self, batch_id):\n        result = await self._process(batch_id)\n        self.total_count += 1  # ← read-modify-write on shared state\n        return result", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-20T09:31:00+00:00"}, {"content": "Found it. `self.total_count += 1` is read-modify-write on shared state with no lock. Under parallel `asyncio.gather`, two coroutines can read the same value before either writes back, so increments get lost.\n\nThe fix is either `asyncio.Lock` or atomic increment via `itertools.count`.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-20T09:32:00+00:00"}, {"content": "Use Lock — I want the code to stay readable.", "message_type": "user", "role": "user", "timestamp": "2026-04-20T09:32:00+00:00"}, {"content": "Tool: Edit(src/pipeline.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-20T09:33:00+00:00"}, {"content": "Added `self._lock = asyncio.Lock()` and wrapped the counter in `async with self._lock`.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-20T09:33:00+00:00"}, {"content": "Can you run the test 50 times to make sure it's actually fixed?", "message_type": "user", "role": "user", "timestamp": "2026-04-20T09:34:00+00:00"}, {"content": "Tool: Bash(for i in $(seq 1 50); do pytest tests/test_ingest.py::test_parallel_ingest -x -q || break; done)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-20T09:34:00+00:00"}, {"content": "50 passed, 0 failed", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-20T09:36:00+00:00"}, {"content": "50/50 pass. The race is gone.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-20T09:36:00+00:00"}, {"content": "Wait — will the Lock serialize all ingests? That defeats the parallelism.", "message_type": "user", "role": "user", "timestamp": "2026-04-20T09:37:00+00:00"}, {"content": "Good catch. The Lock only wraps the counter increment (2 nanoseconds of work) — `_process` still runs in parallel. But you're right that for very high throughput, a lock-free increment is better. Want me to switch to `itertools.count`?", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-20T09:38:00+00:00"}, {"content": "No, this is fine for our scale. One more thing — add a comment explaining why the lock is there?", "message_type": "user", "role": "user", "timestamp": "2026-04-20T09:39:00+00:00"}, {"content": "Tool: Edit(src/pipeline.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-20T09:39:00+00:00"}, {"content": "Added: `# Lock prevents lost updates when many ingests complete concurrently.`", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-20T09:39:00+00:00"}, {"content": "Perfect, shipping.", "message_type": "user", "role": "user", "timestamp": "2026-04-20T09:40:00+00:00"}], "s-react-patterns-0005": [{"content": "Our React dashboard is slow. Can you find current best-practice patterns for performance in React 19?", "message_type": "user", "role": "user", "timestamp": "2026-04-19T11:00:00+00:00"}, {"content": "Tool: WebSearch(React 19 performance patterns 2026)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-19T11:00:00+00:00"}, {"content": "Top results: react.dev/learn/render-and-commit, Kent C. Dodds blog on React 19 compiler, Vercel engineering blog on RSC perf.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-19T11:01:00+00:00"}, {"content": "Tool: WebFetch(https://react.dev/learn/you-might-not-need-an-effect)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-19T11:01:00+00:00"}, {"content": "Key patterns: derive state from props instead of useEffect; compute expensive values with useMemo; memoize callbacks passed to children with useCallback; split state so only affected components re-render; colocate state near where it's used.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-19T11:02:00+00:00"}, {"content": "Here are the current patterns most applicable to a dashboard:\n\n1. **React 19 compiler** — auto-memoizes. If you're on 19+, stop manually `useMemo`-ing. Check `react-compiler-healthcheck`.\n2. **Colocate state** — if only ChartCard uses `hoveredPoint`, don't lift it to the root. Prevents whole-tree re-renders.\n3. **Virtualize long lists** — `react-window` or TanStack Virtual for >100 rows.\n4. **Split contexts** — one giant context → every consumer re-renders. Split by update frequency.\n5. **Suspense + RSC boundaries** — shift data loading to the server where possible.\n\nWant me to profile the dashboard first and point at specific hot spots?", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-19T11:03:00+00:00"}, {"content": "Yes — what profiler should I use?", "message_type": "user", "role": "user", "timestamp": "2026-04-19T11:04:00+00:00"}, {"content": "The built-in React DevTools Profiler is still the right starting point. It shows:\n- Which components rendered\n- Why (props/state/context changed)\n- How long each took\n\nRecord a representative interaction (e.g., filter change), look for components rendering with unchanged props — those are the cheap wins.\n\nFor JS-level perf (not just render), use Chrome DevTools → Performance tab → capture.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-19T11:05:00+00:00"}, {"content": "Ok, I'll profile and come back with specifics. Thanks.", "message_type": "user", "role": "user", "timestamp": "2026-04-19T11:06:00+00:00"}], "s-task-queue-0006": [{"content": "I want to build a simple distributed task queue in Python using Redis. Nothing too fancy — just workers, retries, and a CLI to submit jobs. Can you help me build this step by step?", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:00:00+00:00"}, {"content": "Yes, this is a great scope for a single-session build. Let me outline the architecture before we write code:\n\n- **Broker**: Redis (list as a FIFO queue per priority)\n- **Worker**: a long-running process that BLPOP's jobs, executes registered task functions, handles retries\n- **Client/CLI**: enqueues a job by name + JSON-serialized args\n- **Results (optional)**: Redis hash keyed by job ID\n\nSound good?", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:01:00+00:00"}, {"content": "Yes, go ahead.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:02:00+00:00"}, {"content": "Tool: Write(pyproject.toml)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:02:00+00:00"}, {"content": "Created pyproject.toml with deps: redis, click, pydantic.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:02:00+00:00"}, {"content": "Tool: Bash(uv venv && uv pip install -e .)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:03:00+00:00"}, {"content": "Installed redis 5.0, click 8.1, pydantic 2.5 into .venv.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:03:00+00:00"}, {"content": "Project scaffold is ready. Let me lay out the directory structure:\n```\ntaskq/\n  __init__.py\n  broker.py      # Redis connection + enqueue/dequeue\n  worker.py      # Worker loop\n  registry.py    # Task registration decorator\n  cli.py         # `taskq submit`, `taskq worker`\n```", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:04:00+00:00"}, {"content": "Looks good. Let's start with the registry and broker.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:05:00+00:00"}, {"content": "Tool: Write(taskq/registry.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:05:00+00:00"}, {"content": "Wrote 18 lines: TASKS dict + @task decorator.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:05:00+00:00"}, {"content": "Tool: Write(taskq/broker.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:06:00+00:00"}, {"content": "Wrote 34 lines: enqueue() and dequeue() with Redis BLPOP.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:06:00+00:00"}, {"content": "Done. The registry is a simple dict with a decorator:\n```python\nTASKS = {}\ndef task(name):\n    def decorator(fn):\n        TASKS[name] = fn\n        return fn\n    return decorator\n```\n\nBroker enqueues by `LPUSH queue:default {json}` and dequeues with `BRPOP` (blocking, FIFO).", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:07:00+00:00"}, {"content": "Now the worker class, please.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:08:00+00:00"}, {"content": "Tool: Write(taskq/worker.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:08:00+00:00"}, {"content": "Wrote 48 lines: Worker class with run() loop, task lookup, JSON deserialization.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:09:00+00:00"}, {"content": "The worker polls `BRPOP queue:default 1`, deserializes the payload to `{task, args, kwargs, id, attempts}`, looks up the function in the registry, calls it. On return, writes the result to a Redis hash.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:10:00+00:00"}, {"content": "How should we handle task failures and retries?", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:12:00+00:00"}, {"content": "Standard approach: on exception, increment the `attempts` counter and re-enqueue after a delay until max_retries. Exponential backoff between retries (1s, 2s, 4s, 8s…).\n\nRedis has two options for delayed re-enqueue:\n- Sorted set scored by `time.time() + delay`, polled by the worker\n- `ZADD` with a separate \"scheduler\" process\n\nLet me add the simple version — sorted set, scanned at the start of each worker loop.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:13:00+00:00"}, {"content": "Tool: Edit(taskq/worker.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:14:00+00:00"}, {"content": "Added handle_failure() method: re-enqueues failed tasks to delayed:<queue> sorted set with exponential backoff.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:14:00+00:00"}, {"content": "Tool: Edit(taskq/worker.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:15:00+00:00"}, {"content": "Added _promote_ready_tasks(): moves due tasks from delayed: sorted set back to the main queue.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:15:00+00:00"}, {"content": "Let's add a priority queue feature. I want at least high/normal/low.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:20:00+00:00"}, {"content": "Cleanest implementation: one Redis list per priority. Worker does `BRPOP queue:high queue:normal queue:low 1` — Redis returns from the first non-empty list, so high-priority jobs get picked first by design.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:20:00+00:00"}, {"content": "Tool: Edit(taskq/broker.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:21:00+00:00"}, {"content": "Added priority parameter to enqueue(); dequeue() now polls high/normal/low in order.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:21:00+00:00"}, {"content": "How can we monitor the queue? Like, see how many jobs are pending?", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:25:00+00:00"}, {"content": "Tool: Write(taskq/stats.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:26:00+00:00"}, {"content": "Wrote 22 lines: queue_depths() and recent_failures() using LLEN and the failures hash.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:26:00+00:00"}, {"content": "`queue_depths()` returns `{'high': 0, 'normal': 14, 'low': 3, 'delayed': 2}`. Should be enough for a basic status check or a `/healthz` endpoint.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:27:00+00:00"}, {"content": "Now a CLI to submit tasks from the shell.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:30:00+00:00"}, {"content": "Tool: Write(taskq/cli.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:31:00+00:00"}, {"content": "Wrote 35 lines: click CLI with submit/worker/stats commands.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:31:00+00:00"}, {"content": "The CLI:\n```\ntaskq submit send_email --arg to=alice@example.com --arg subject='Hi'\ntaskq worker          # start a worker\ntaskq stats           # show queue depths\n```", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:32:00+00:00"}, {"content": "Can we support scheduled tasks? Like cron — run this task every 5 minutes.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:40:00+00:00"}, {"content": "That's worth pulling out into its own file since it's a different concern. The scheduler process:\n1. Reads a `SCHEDULES` dict (from `@scheduled('*/5 * * * *')` decorator)\n2. On each tick, checks which schedules are due\n3. Enqueues the tasks just like a regular submission\n\nUses `croniter` for cron parsing.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:41:00+00:00"}, {"content": "Tool: Bash(uv pip install croniter)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:42:00+00:00"}, {"content": "Installed croniter 2.0.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:42:00+00:00"}, {"content": "Tool: Write(taskq/scheduler.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:42:00+00:00"}, {"content": "Wrote 40 lines: @scheduled decorator + Scheduler class with run_forever().", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:43:00+00:00"}, {"content": "Let's add tests for the core worker behavior.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T09:50:00+00:00"}, {"content": "Tool: Write(tests/test_worker.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:51:00+00:00"}, {"content": "Wrote 65 lines: tests for enqueue, successful run, retry behavior, priority ordering.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:51:00+00:00"}, {"content": "Tool: Bash(pytest tests/ -v)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T09:52:00+00:00"}, {"content": "tests/test_worker.py::test_enqueue_and_run PASSED\ntests/test_worker.py::test_retry_on_failure PASSED\ntests/test_worker.py::test_priority_ordering PASSED\ntests/test_worker.py::test_max_retries_moves_to_failures PASSED\n4 passed in 2.3s", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T09:53:00+00:00"}, {"content": "All green. Tests use `fakeredis` so no real Redis needed during tests.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T09:53:00+00:00"}, {"content": "What about graceful shutdown? I don't want to lose in-flight jobs on SIGTERM.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T10:00:00+00:00"}, {"content": "Tool: Edit(taskq/worker.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T10:01:00+00:00"}, {"content": "Added _shutdown flag + signal handler; worker finishes current task then exits cleanly.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T10:01:00+00:00"}, {"content": "The worker now:\n1. Catches SIGTERM/SIGINT → sets `_shutdown = True`\n2. Finishes the task it's currently running (no kill)\n3. Exits the loop on next iteration\n4. If running under systemd, configure `TimeoutStopSec=60` so it has a minute to finish.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T10:02:00+00:00"}, {"content": "How do we scale this to multiple workers on different machines?", "message_type": "user", "role": "user", "timestamp": "2026-04-18T10:10:00+00:00"}, {"content": "It already works! Each worker is independent — they all BRPOP the same Redis queues. Redis handles the atomic handoff, so no two workers ever pick the same job.\n\nFor production:\n- Run N workers per machine, M machines → you have N×M parallelism\n- Workers are stateless, so autoscaling is easy\n- Single Redis is the bottleneck at ~50k ops/sec. Past that, use Redis Cluster or split by queue.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T10:11:00+00:00"}, {"content": "Add structured logging — I want JSON logs for our log aggregator.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T10:15:00+00:00"}, {"content": "Tool: Edit(taskq/worker.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T10:16:00+00:00"}, {"content": "Replaced print() calls with structlog; added correlation_id = job_id for every log line.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T10:16:00+00:00"}, {"content": "Every log line now includes: `ts`, `level`, `event`, `job_id`, `task_name`, `attempts`, `duration_ms`. Works with Datadog, Elastic, and anything that speaks JSON.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T10:17:00+00:00"}, {"content": "Let's add a simple web dashboard to view stats in the browser.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T10:25:00+00:00"}, {"content": "Tool: Write(taskq/dashboard.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T10:26:00+00:00"}, {"content": "Wrote 55 lines: Flask app with / showing queue depths + recent failures, auto-refresh every 5s.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T10:26:00+00:00"}, {"content": "`taskq dashboard --port 8080` starts a Flask app with a single page: queue depth bars + a table of the last 20 failures. Intentionally minimal — if you need more, integrate with Grafana by exposing Prometheus metrics (which we'll add next).", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T10:27:00+00:00"}, {"content": "How do we handle distributed locks? Sometimes a task should only run once across all workers.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T10:35:00+00:00"}, {"content": "Classic use case for Redis `SET NX`:\n\n```python\nfrom contextlib import contextmanager\n\n@contextmanager\ndef lock(redis, key, ttl=30):\n    token = secrets.token_hex(16)\n    if not redis.set(f'lock:{key}', token, nx=True, ex=ttl):\n        raise LockError(f'Already held: {key}')\n    try:\n        yield\n    finally:\n        # Only delete if we still own it\n        redis.eval(\"\"\"if redis.call('get',KEYS[1])==ARGV[1]\n                      then return redis.call('del',KEYS[1]) end\"\"\", 1, f'lock:{key}', token)\n```\n\nThe TTL + token pattern prevents stale locks if the worker dies mid-task.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T10:36:00+00:00"}, {"content": "What's a good deployment strategy?", "message_type": "user", "role": "user", "timestamp": "2026-04-18T10:45:00+00:00"}, {"content": "For most teams: Docker container + systemd (or k8s Deployment with replicas). Your `taskq worker` command is the container entrypoint.\n\nExample systemd:\n```\n[Service]\nExecStart=/opt/taskq/bin/taskq worker\nRestart=always\nTimeoutStopSec=60\n```\n\nFor k8s, use a Deployment with `terminationGracePeriodSeconds: 60` and set it to not kill the pod mid-task.\n\nRedis: managed service (ElastiCache, Upstash) is fine for most workloads. Self-hosted only if you want control.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T10:46:00+00:00"}, {"content": "Add Prometheus metrics.", "message_type": "user", "role": "user", "timestamp": "2026-04-18T10:55:00+00:00"}, {"content": "Tool: Bash(uv pip install prometheus-client)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T10:56:00+00:00"}, {"content": "Installed prometheus-client 0.20.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T10:56:00+00:00"}, {"content": "Tool: Edit(taskq/worker.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T10:57:00+00:00"}, {"content": "Added Counter(tasks_total{task,status}) and Histogram(task_duration_seconds{task}).", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T10:57:00+00:00"}, {"content": "Tool: Edit(taskq/dashboard.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T10:58:00+00:00"}, {"content": "Added /metrics endpoint serving prometheus_client.generate_latest().", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T10:58:00+00:00"}, {"content": "Scrape `http://worker:8080/metrics` from Prometheus. Metrics:\n- `taskq_tasks_total{task, status}` (counter)\n- `taskq_task_duration_seconds{task}` (histogram with default buckets)\n- `taskq_queue_depth{queue}` (gauge, sampled every 15s)", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T10:59:00+00:00"}, {"content": "How should we document this?", "message_type": "user", "role": "user", "timestamp": "2026-04-18T11:05:00+00:00"}, {"content": "Tool: Write(README.md)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-18T11:06:00+00:00"}, {"content": "Wrote 120-line README with install, quickstart, CLI reference, deploying, monitoring sections.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-18T11:06:00+00:00"}, {"content": "The README covers:\n1. Install\n2. Quickstart (decorator example + CLI)\n3. Priorities & retries\n4. Scheduling\n5. Deployment (systemd + k8s snippets)\n6. Monitoring (Prometheus + dashboard)\n\nFor per-function docs, docstrings are in place — you can generate HTML with `pdoc taskq`.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T11:07:00+00:00"}, {"content": "Thanks, this came together really well!", "message_type": "user", "role": "user", "timestamp": "2026-04-18T11:10:00+00:00"}, {"content": "Glad it worked out. A recap of what we built:\n\n- **taskq/** Python package, ~500 lines total\n- Redis-backed, priority queues, retries with exponential backoff\n- Graceful shutdown, distributed locks\n- CLI, dashboard, Prometheus metrics\n- 4 tests, all passing\n\nNext if you want to extend: rate limiting per task, dead-letter queue, job chaining.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-18T11:11:00+00:00"}], "s-db-migration-0007": [{"content": "Can you review `migrations/0042_add_indexes.sql` before I apply it to prod? The table has 80M rows.", "message_type": "user", "role": "user", "timestamp": "2026-04-17T14:00:00+00:00"}, {"content": "Tool: Read(migrations/0042_add_indexes.sql)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-17T14:00:00+00:00"}, {"content": "CREATE INDEX idx_events_user_created ON events(user_id, created_at);\nCREATE INDEX idx_events_type ON events(type);", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-17T14:00:00+00:00"}, {"content": "Two issues to flag:\n\n1. **Locks writes**: plain `CREATE INDEX` locks the table for writes until it completes. On 80M rows that's 10+ minutes of write downtime.\n2. **No rollback**: if the migration fails halfway, you're stuck.\n\nFix both with `CREATE INDEX CONCURRENTLY` and separate the two indexes into individual migrations.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-17T14:01:00+00:00"}, {"content": "Yeah good point. Rewrite it?", "message_type": "user", "role": "user", "timestamp": "2026-04-17T14:02:00+00:00"}, {"content": "Tool: Edit(migrations/0042_add_indexes.sql)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-17T14:02:00+00:00"}, {"content": "Split into 0042 and 0043, both using CONCURRENTLY. Added DROP INDEX IF EXISTS as down migrations.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-17T14:02:00+00:00"}, {"content": "How long will CONCURRENTLY take on 80M rows?", "message_type": "user", "role": "user", "timestamp": "2026-04-17T14:04:00+00:00"}, {"content": "Rule of thumb: 1-2x the time of a regular CREATE INDEX. On an m5.xlarge with decent disk, expect 20-40 minutes for an 80M row b-tree index on (user_id, created_at). The second index on `type` will be faster (~5 min) since it's a single short column.\n\nCONCURRENTLY uses more I/O and CPU but doesn't block writes — so application latency will rise a bit during the build.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-17T14:05:00+00:00"}, {"content": "Can you check if those columns have any nulls? Nulls mess with the index sometimes.", "message_type": "user", "role": "user", "timestamp": "2026-04-17T14:07:00+00:00"}, {"content": "Tool: Bash(psql prod -c \"SELECT count(*) FROM events WHERE user_id IS NULL OR created_at IS NULL OR type IS NULL;\")", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-17T14:07:00+00:00"}, {"content": " count\n-------\n     0\n(1 row)", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-17T14:08:00+00:00"}, {"content": "No nulls in any of the three columns, so `NOT NULL` is already enforced de facto. The indexes will work fine.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-17T14:08:00+00:00"}, {"content": "One last thing — how do I verify the index is actually being used after the migration?", "message_type": "user", "role": "user", "timestamp": "2026-04-17T14:10:00+00:00"}, {"content": "Run `EXPLAIN ANALYZE` on a representative query:\n```sql\nEXPLAIN ANALYZE SELECT * FROM events \nWHERE user_id = 42 AND created_at > now() - interval '7 days';\n```\n\nLook for `Index Scan using idx_events_user_created` — if you see `Seq Scan` instead, the planner decided the index isn't worth it (usually means the query matches too many rows or the stats are stale; try `ANALYZE events;`).", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-17T14:11:00+00:00"}, {"content": "Perfect, will run it post-deploy. Thanks.", "message_type": "user", "role": "user", "timestamp": "2026-04-17T14:12:00+00:00"}], "s-nginx-config-0008": [{"content": "I'm taking over this nginx config. Can you walk me through what `/etc/nginx/sites-available/api.conf` does?", "message_type": "user", "role": "user", "timestamp": "2026-04-16T15:00:00+00:00"}, {"content": "Tool: Read(/etc/nginx/sites-available/api.conf)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-16T15:00:00+00:00"}, {"content": "upstream api_backend {\n    least_conn;\n    server 10.0.1.10:8080 max_fails=3 fail_timeout=30s;\n    server 10.0.1.11:8080 max_fails=3 fail_timeout=30s;\n    keepalive 32;\n}\n\nserver {\n    listen 443 ssl http2;\n    server_name api.example.com;\n\n    ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;\n\n    location / {\n        proxy_pass http://api_backend;\n        proxy_http_version 1.1;\n        proxy_set_header Connection \"\";\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_read_timeout 60s;\n    }\n}", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-16T15:00:00+00:00"}, {"content": "Here's what each piece does:\n\n**upstream api_backend**\n- Two backend API servers at .10 and .11, port 8080\n- `least_conn`: new requests go to whichever backend has fewer active connections\n- `max_fails=3, fail_timeout=30s`: after 3 failed requests, mark the backend down for 30s\n- `keepalive 32`: keep up to 32 idle upstream connections per worker (reduces reconnection overhead)\n\n**server block**\n- HTTPS on 443 with HTTP/2\n- Let's Encrypt cert\n\n**location /** — this is the actual proxy:\n- `proxy_http_version 1.1` + `Connection \"\"` — required for keepalive to the upstream\n- `X-Forwarded-For`/`X-Real-IP` — backend can see real client IP\n- `proxy_read_timeout 60s` — kills requests that take >60s\n\nStandard, well-tuned setup.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-16T15:01:00+00:00"}, {"content": "What's the failure mode if both backends go down?", "message_type": "user", "role": "user", "timestamp": "2026-04-16T15:03:00+00:00"}, {"content": "Once both are marked unavailable (3 fails each), nginx returns `502 Bad Gateway` immediately without attempting upstream connections for the `fail_timeout` window. After 30s it tries one again — if that succeeds, it comes back online.\n\nIf you want a fallback page instead of a bare 502, add:\n```\nerror_page 502 503 504 /maintenance.html;\nlocation = /maintenance.html {\n    root /var/www/errors;\n    internal;\n}\n```", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-16T15:04:00+00:00"}, {"content": "Got it, thanks.", "message_type": "user", "role": "user", "timestamp": "2026-04-16T15:05:00+00:00"}], "s-git-merge-0009": [{"content": "I just merged main into my feature branch and got conflicts in 4 files. Can you help me work through them?", "message_type": "user", "role": "user", "timestamp": "2026-04-15T13:00:00+00:00"}, {"content": "Tool: Bash(git status)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-15T13:00:00+00:00"}, {"content": "On branch feature/user-preferences\nYou have unmerged paths.\n\nUnmerged paths:\n  both modified:   src/api/users.py\n  both modified:   src/models/user.py\n  both modified:   tests/test_users.py\n  both modified:   README.md", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-15T13:00:00+00:00"}, {"content": "Tool: Bash(git diff src/models/user.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-15T13:01:00+00:00"}, {"content": "<<<<<<< HEAD\nclass User(BaseModel):\n    id: int\n    email: str\n    preferences: UserPrefs = Field(default_factory=UserPrefs)\n=======\nclass User(BaseModel):\n    id: int\n    email: str\n    display_name: str | None = None\n>>>>>>> main", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-15T13:01:00+00:00"}, {"content": "`src/models/user.py`: your branch added `preferences`, main added `display_name`. These don't conflict semantically — you just need to keep both fields. Let me resolve.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-15T13:02:00+00:00"}, {"content": "Tool: Edit(src/models/user.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-15T13:02:00+00:00"}, {"content": "Kept both `preferences` and `display_name` fields.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-15T13:02:00+00:00"}, {"content": "And the api/users.py one?", "message_type": "user", "role": "user", "timestamp": "2026-04-15T13:03:00+00:00"}, {"content": "Tool: Bash(git diff src/api/users.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-15T13:03:00+00:00"}, {"content": "<<<<<<< HEAD\ndef get_user(id: int) -> User:\n    user = db.get(id)\n    user.preferences = load_prefs(id)\n    return user\n=======\ndef get_user(id: int) -> User:\n    user = db.get(id)\n    if not user:\n        raise NotFoundError(f\"user {id}\")\n    return user\n>>>>>>> main", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-15T13:04:00+00:00"}, {"content": "This one needs both the null-check from main AND your preferences loading. Merge them in the correct order — null-check first, then load prefs:\n```python\ndef get_user(id: int) -> User:\n    user = db.get(id)\n    if not user:\n        raise NotFoundError(f\"user {id}\")\n    user.preferences = load_prefs(id)\n    return user\n```", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-15T13:05:00+00:00"}, {"content": "Tool: Edit(src/api/users.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-15T13:05:00+00:00"}, {"content": "Applied combined fix.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-15T13:05:00+00:00"}, {"content": "Tests next.", "message_type": "user", "role": "user", "timestamp": "2026-04-15T13:07:00+00:00"}, {"content": "Tool: Bash(git diff tests/test_users.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-15T13:07:00+00:00"}, {"content": "Both sides added a new test function at the end of the file — no actual semantic conflict, just adjacent lines.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-15T13:07:00+00:00"}, {"content": "Tool: Edit(tests/test_users.py)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-15T13:08:00+00:00"}, {"content": "Kept both test functions.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-15T13:08:00+00:00"}, {"content": "And README.md — probably just trivial?", "message_type": "user", "role": "user", "timestamp": "2026-04-15T13:10:00+00:00"}, {"content": "Tool: Edit(README.md)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-15T13:10:00+00:00"}, {"content": "Both sides added a bullet to the Features list; kept both.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-15T13:10:00+00:00"}, {"content": "Tool: Bash(pytest -x && git add -A && git commit --no-edit)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-15T13:11:00+00:00"}, {"content": "42 passed in 5.1s\n[feature/user-preferences abc1234] Merge branch 'main' into feature/user-preferences", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-15T13:12:00+00:00"}, {"content": "All conflicts resolved, tests pass, merge commit created. You're ready to push.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-15T13:12:00+00:00"}, {"content": "Thanks for walking through it.", "message_type": "user", "role": "user", "timestamp": "2026-04-15T13:13:00+00:00"}], "s-regex-help-0010": [{"content": "What's a reasonable regex for validating email addresses? I don't need RFC-5322 perfect, just good enough to catch typos.", "message_type": "user", "role": "user", "timestamp": "2026-04-14T18:00:00+00:00"}, {"content": "Honestly — the shortest one that catches >99% of real typos is:\n\n```\n^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$\n```\n\nIt requires: something, @, something, ., something, all without spaces. Misses almost no valid emails and rejects obviously bad ones.\n\nIf you want stricter character classes:\n\n```\n^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$\n```\n\nBut: if the email is used for actual delivery, don't validate with regex — send a confirmation email. That catches 100% of bad emails including valid-looking ones at nonexistent domains.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-14T18:01:00+00:00"}, {"content": "Good point on the confirmation email. Is the first regex safe from ReDoS?", "message_type": "user", "role": "user", "timestamp": "2026-04-14T18:03:00+00:00"}, {"content": "Yes. It has no nested quantifiers or backtracking hazards — every `[^\\s@]+` is followed by a fixed literal (`@`, `.`). Linear in input length.\n\nA dangerous pattern would look like `(a+)+$` where the engine can explore exponentially many paths. Nothing like that here.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-14T18:04:00+00:00"}, {"content": "Thanks.", "message_type": "user", "role": "user", "timestamp": "2026-04-14T18:05:00+00:00"}], "s-docker-debug-0011": [{"content": "My API container can't connect to the postgres container even though they're on the same Docker network. I've tried `postgres:5432` and it hangs.", "message_type": "user", "role": "user", "timestamp": "2026-04-13T10:30:00+00:00"}, {"content": "Tool: Bash(docker ps)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-13T10:30:00+00:00"}, {"content": "CONTAINER ID   IMAGE                COMMAND                  PORTS\nabc123         api:latest           \"./run.sh\"               8080/tcp\ndef456         postgres:16          \"docker-entrypoint…\"    0.0.0.0:5432->5432/tcp", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-13T10:31:00+00:00"}, {"content": "Tool: Bash(docker network inspect bridge | grep -A5 Containers)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-13T10:31:00+00:00"}, {"content": "        \"Containers\": {}", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-13T10:31:00+00:00"}, {"content": "Found it. Both containers are running but `docker network inspect bridge` shows no containers attached. They're probably on the default bridge network and using different networks per `docker-compose` service.\n\nLet me check.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-13T10:32:00+00:00"}, {"content": "Tool: Bash(docker network ls)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-13T10:32:00+00:00"}, {"content": "NETWORK ID    NAME              DRIVER\nabc           bridge            bridge\ndef           host              host\nghi           dockerlab_default bridge", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-13T10:32:00+00:00"}, {"content": "Tool: Bash(docker network inspect dockerlab_default)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-13T10:33:00+00:00"}, {"content": "Containers: {def456: postgres} — only the postgres container is on this network.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-13T10:33:00+00:00"}, {"content": "That's the problem. Your API container was started with `docker run` outside of `docker-compose`, so it's on the default `bridge` network. Postgres is on `dockerlab_default` (created by compose).\n\nEither:\n1. Run the API via docker-compose so it joins the same network (preferred)\n2. Or attach the API to the compose network: `docker network connect dockerlab_default <api-container-id>`", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-13T10:34:00+00:00"}, {"content": "I'll go with option 1. Can you show me the docker-compose.yaml?", "message_type": "user", "role": "user", "timestamp": "2026-04-13T10:36:00+00:00"}, {"content": "Tool: Read(docker-compose.yaml)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-13T10:36:00+00:00"}, {"content": "services:\n  postgres:\n    image: postgres:16\n    ports: [\"5432:5432\"]\n    environment: {POSTGRES_PASSWORD: dev}", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-13T10:36:00+00:00"}, {"content": "You don't have the `api` service in compose yet. Add:\n```yaml\n  api:\n    build: .\n    depends_on: [postgres]\n    environment:\n      DATABASE_URL: postgres://postgres:dev@postgres:5432/postgres\n    ports: [\"8080:8080\"]\n```\n\nThen `docker-compose up --build`. Hostname `postgres` will resolve because compose puts both on the same network and registers service names as DNS.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-13T10:37:00+00:00"}, {"content": "That worked. Why does compose use the service name as hostname?", "message_type": "user", "role": "user", "timestamp": "2026-04-13T10:42:00+00:00"}, {"content": "Compose creates a user-defined bridge network for the project, and Docker's embedded DNS resolver automatically registers each container's service name as a DNS A record on that network.\n\nSo `postgres:5432` works because `postgres` resolves to the container's IP. The default `bridge` network doesn't do this — you'd have to use `--link` (deprecated) or IPs.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-13T10:43:00+00:00"}, {"content": "Makes sense, thanks.", "message_type": "user", "role": "user", "timestamp": "2026-04-13T10:45:00+00:00"}], "s-api-design-0012": [{"content": "We're picking an API style for a new mobile app backend. 3 platforms (iOS/Android/Web), read-heavy, ~20 resource types. REST vs GraphQL — what's the current thinking?", "message_type": "user", "role": "user", "timestamp": "2026-04-12T16:00:00+00:00"}, {"content": "Tool: WebSearch(GraphQL vs REST mobile backend 2026 tradeoffs)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-12T16:00:00+00:00"}, {"content": "Top results: apollographql.com/blog (GraphQL vendor, biased), netflixtechblog.com on Federation, stackoverflow survey 2025 showing REST still dominant.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-12T16:00:00+00:00"}, {"content": "Tool: WebFetch(https://netflixtechblog.com/how-netflix-scales-its-api-with-graphql)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-12T16:01:00+00:00"}, {"content": "Netflix uses GraphQL Federation for cross-team schema composition. Key value: each team owns a subgraph; clients get one endpoint. Costs: schema coordination, operational complexity, harder caching.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-12T16:02:00+00:00"}, {"content": "Honest summary for your constraints:\n\n**GraphQL wins if:**\n- Multiple clients need different subsets of the same data (mobile wants less than web — classic GraphQL strength)\n- You have the team to own a schema + tooling (Apollo/Relay)\n- Over-fetching on 20 resource types would be real\n\n**REST wins if:**\n- Endpoint-level caching matters (CDN-friendly)\n- Simple CRUD dominates (no deep nested reads)\n- You don't have a GraphQL-experienced team yet\n\nFor a read-heavy mobile app with 3 clients, GraphQL's variable-response-shape is a genuine fit. But the operational cost is non-trivial — subscriptions, N+1 query issues, query cost analysis.\n\nA middle ground worth considering: REST + `include=` query param for eager-loading (as JSON:API does).", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-12T16:03:00+00:00"}, {"content": "What about BFF pattern?", "message_type": "user", "role": "user", "timestamp": "2026-04-12T16:05:00+00:00"}, {"content": "BFF (Backend-for-Frontend) is the pragmatic compromise:\n\n- One REST-ish service per client (`mobile-bff`, `web-bff`)\n- Each BFF composes calls to internal services and returns tailored responses\n- No schema language needed, just idiomatic HTTP\n\nTradeoffs:\n- **Pro**: clients are simple; each BFF is tuned to one UI\n- **Pro**: easy to cache per endpoint at the CDN\n- **Con**: code duplication across BFFs\n- **Con**: one more service to run per client\n\nFor 3 clients this is manageable. For 10+ clients, GraphQL Federation starts to pay off.", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-12T16:06:00+00:00"}, {"content": "Great, I think we'll start with REST + BFFs and revisit if we feel the pain. Can you write up the decision as an ADR?", "message_type": "user", "role": "user", "timestamp": "2026-04-12T16:10:00+00:00"}, {"content": "Tool: Write(docs/adr/0007-api-style.md)", "message_type": "tool_call", "role": "assistant", "timestamp": "2026-04-12T16:11:00+00:00"}, {"content": "Wrote 45-line ADR with context, decision, consequences, alternatives.", "message_type": "tool_result", "role": "tool", "timestamp": "2026-04-12T16:11:00+00:00"}, {"content": "ADR 0007 drafted. Structure:\n- **Context**: 3 clients, 20 resource types, read-heavy\n- **Decision**: REST with per-client BFFs\n- **Consequences**: simpler start, some duplication, revisit if client count grows\n- **Alternatives considered**: GraphQL (rejected: team velocity), BFF-less shared REST (rejected: over-fetching on mobile)", "message_type": "assistant", "role": "assistant", "timestamp": "2026-04-12T16:12:00+00:00"}, {"content": "Thanks, that's exactly the shape I needed.", "message_type": "user", "role": "user", "timestamp": "2026-04-12T16:13:00+00:00"}]}};
+</script>
+<script id="static-shim">
+(function() {
+  document.documentElement.classList.add('static-mode');
+  document.addEventListener('DOMContentLoaded', () => {
+    const banner = document.createElement('div');
+    banner.className = 'demo-banner';
+    banner.innerHTML = "Read-only static demo \u2014 <a href=\"https://github.com/DesmondZhong/claude-sessions-dashboard\" target=\"_blank\" rel=\"noopener\">view on GitHub</a>";
+    document.body.insertBefore(banner, document.body.firstChild);
+  });
+
+  const realFetch = window.fetch.bind(window);
+  function mkResp(body, status) {
+    status = status || 200;
+    return Promise.resolve({
+      ok: status < 400,
+      status: status,
+      json: () => Promise.resolve(body),
+    });
+  }
+
+  function buildSessionsResponse(params) {
+    const q = (params.get('q') || '').toLowerCase();
+    const vm = params.get('vm');
+    const project = params.get('project');
+
+    let results = STATIC_DATA.sessions.filter(s => {
+      if (vm && s.vm_name !== vm) return false;
+      if (project && !((s.project || '').includes(project))) return false;
+      if (q) {
+        const meta = ((s.summary || '') + ' ' + (s.project || '') + ' ' +
+                      (s.custom_title || '')).toLowerCase();
+        if (meta.includes(q)) return true;
+        const msgs = STATIC_DATA.messages[s.id] || [];
+        return msgs.some(m => (m.content || '').toLowerCase().includes(q));
+      }
+      return true;
+    });
+
+    results = results.slice().sort((a, b) =>
+      (b.last_timestamp || '').localeCompare(a.last_timestamp || ''));
+
+    if (q) {
+      results = results.map(s => {
+        const msgs = STATIC_DATA.messages[s.id] || [];
+        for (const m of msgs) {
+          const c = m.content || '';
+          const idx = c.toLowerCase().indexOf(q);
+          if (idx >= 0) {
+            const start = Math.max(0, idx - 40);
+            const end = Math.min(c.length, idx + q.length + 80);
+            let snippet = c.slice(start, end).replace(/\n/g, ' ');
+            if (start > 0) snippet = '…' + snippet;
+            if (end < c.length) snippet = snippet + '…';
+            return Object.assign({}, s, {match_snippet: snippet});
+          }
+        }
+        return s;
+      });
+    }
+
+    const vmSet = new Set(STATIC_DATA.sessions.map(s => s.vm_name).filter(Boolean));
+    const projSet = new Set(STATIC_DATA.sessions.map(s => s.project).filter(Boolean));
+    return {
+      sessions: results,
+      filters: {
+        vms: [...vmSet].sort(),
+        projects: [...projSet].sort(),
+      },
+    };
+  }
+
+  window.fetch = function(url, opts) {
+    if (typeof url !== 'string') return realFetch(url, opts);
+    if (url === '/api/clients') {
+      return mkResp({
+        clients: STATIC_DATA.clients,
+        total_sessions: STATIC_DATA.sessions.length,
+      });
+    }
+    if (url === '/api/sessions' || url.startsWith('/api/sessions?')) {
+      const qs = url.includes('?') ? url.split('?')[1] : '';
+      return mkResp(buildSessionsResponse(new URLSearchParams(qs)));
+    }
+    const m = url.match(/^\/api\/sessions\/([^?]+)$/);
+    if (m) {
+      const id = decodeURIComponent(m[1]);
+      const session = STATIC_DATA.sessions.find(s => s.id === id);
+      if (!session) return mkResp({error: 'not found'}, 404);
+      return mkResp({session: session, messages: STATIC_DATA.messages[id] || []});
+    }
+    if (url.startsWith('/api/admin/')) {
+      return mkResp({error: 'This is a static demo — admin actions are disabled.'}, 403);
+    }
+    return realFetch(url, opts);
+  };
+})();
+</script>
+<script>
+let allSessions = [];
+let debounceTimer;
+
+function toggleClients() {
+  const body = document.getElementById('clients-body');
+  const arrow = document.getElementById('clients-arrow');
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+function clientStatus(lastSync) {
+  if (!lastSync) return 'offline';
+  const diff = Date.now() - new Date(lastSync).getTime();
+  if (diff < 2 * 3600000) return 'online';   // synced within 2h (interval is 1h)
+  if (diff < 6 * 3600000) return 'stale';     // within 6h
+  return 'offline';
+}
+
+async function loadClients() {
+  try {
+    const res = await fetch('/api/clients');
+    const data = await res.json();
+    document.getElementById('clients-count').textContent = data.clients.length;
+    const tbody = document.getElementById('clients-tbody');
+    if (!data.clients.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px">No clients connected yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.clients.map(a => {
+      const st = clientStatus(a.last_sync);
+      const label = st === 'online' ? 'Online' : st === 'stale' ? 'Stale' : 'Offline';
+      const vmEsc = esc(a.vm_name);
+      return `<tr>
+        <td><span class="status-dot ${st}"></span>${label}</td>
+        <td><strong>${vmEsc}</strong></td>
+        <td><code>${esc(a.ip_address || 'unknown')}</code></td>
+        <td>${a.session_count}</td>
+        <td>${formatTime(a.last_sync)}</td>
+        <td class="client-actions">
+          <button class="client-action" onclick="renameClient('${vmEsc}')" title="Merge this client's sessions into another name">Rename</button>
+          <button class="client-action" onclick="deleteClient('${vmEsc}')" title="Remove this client entry (sessions are kept)">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (e) { /* ignore */ }
+}
+
+function getAdminApiKey() {
+  let key = sessionStorage.getItem('admin_api_key');
+  if (!key) {
+    key = prompt('Enter server API key (for admin actions):');
+    if (key) sessionStorage.setItem('admin_api_key', key);
+  }
+  return key;
+}
+
+async function renameClient(fromName) {
+  const toName = prompt(`Merge "${fromName}" into which client name?`);
+  if (!toName || toName === fromName) return;
+  const key = getAdminApiKey();
+  if (!key) return;
+  const res = await fetch('/api/admin/rename-client', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-API-Key': key},
+    body: JSON.stringify({from: fromName, to: toName}),
+  });
+  if (res.status === 401) {
+    sessionStorage.removeItem('admin_api_key');
+    alert('Invalid API key.');
+    return;
+  }
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + (data.error || res.status)); return; }
+  alert(`Merged: ${data.sessions_updated} sessions updated, ${data.clients_removed} client row(s) removed.`);
+  refresh();
+}
+
+let pendingMove = null;  // {sessionId, currentVm}
+
+function moveSession(sessionId, currentVm) {
+  pendingMove = { sessionId, currentVm };
+  const select = document.getElementById('move-select');
+  const options = knownVms
+    .filter(v => v !== currentVm)
+    .map(v => `<option value="${esc(v)}">${esc(v)}</option>`)
+    .join('');
+  select.innerHTML = options + '<option value="__new__">+ New group…</option>';
+  document.getElementById('move-new-wrap').style.display = 'none';
+  document.getElementById('move-new-input').value = '';
+  select.onchange = () => {
+    document.getElementById('move-new-wrap').style.display =
+      select.value === '__new__' ? 'block' : 'none';
+    if (select.value === '__new__') document.getElementById('move-new-input').focus();
+  };
+  // If there are no existing target groups, default to new-group input
+  if (knownVms.filter(v => v !== currentVm).length === 0) {
+    select.value = '__new__';
+    select.onchange();
+  }
+  document.getElementById('move-modal').classList.add('open');
+}
+
+function closeMoveModal() {
+  document.getElementById('move-modal').classList.remove('open');
+  pendingMove = null;
+}
+
+async function confirmMove() {
+  if (!pendingMove) return;
+  const select = document.getElementById('move-select');
+  let newVm = select.value;
+  if (newVm === '__new__') {
+    newVm = document.getElementById('move-new-input').value.trim();
+    if (!newVm) { alert('Please enter a group name.'); return; }
+  }
+  if (!newVm || newVm === pendingMove.currentVm) { closeMoveModal(); return; }
+  const key = getAdminApiKey();
+  if (!key) { closeMoveModal(); return; }
+  const res = await fetch('/api/admin/move-session', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-API-Key': key},
+    body: JSON.stringify({session_id: pendingMove.sessionId, vm_name: newVm}),
+  });
+  if (res.status === 401) {
+    sessionStorage.removeItem('admin_api_key');
+    alert('Invalid API key.');
+    closeMoveModal();
+    return;
+  }
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + (data.error || res.status)); closeMoveModal(); return; }
+  closeMoveModal();
+  refresh();
+}
+
+async function deleteClient(vmName) {
+  if (!confirm(`Remove client entry "${vmName}"? Sessions are kept.`)) return;
+  const key = getAdminApiKey();
+  if (!key) return;
+  const res = await fetch('/api/admin/delete-client', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-API-Key': key},
+    body: JSON.stringify({vm_name: vmName}),
+  });
+  if (res.status === 401) {
+    sessionStorage.removeItem('admin_api_key');
+    alert('Invalid API key.');
+    return;
+  }
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + (data.error || res.status)); return; }
+  refresh();
+}
+
+async function loadSessions() {
+  const el = document.getElementById('session-list');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  try {
+    const params = new URLSearchParams();
+    const q = document.getElementById('search').value;
+    const vm = document.getElementById('vm-filter').value;
+    const proj = document.getElementById('project-filter').value;
+    if (q) params.set('q', q);
+    if (vm) params.set('vm', vm);
+    if (proj) params.set('project', proj);
+    const res = await fetch('/api/sessions?' + params);
+    const data = await res.json();
+    allSessions = data.sessions;
+    renderFilters(data.filters);
+    renderList(data.sessions);
+  } catch (e) {
+    el.innerHTML = '<div class="empty">Failed to load sessions</div>';
+  }
+}
+
+function renderFilters(filters) {
+  knownVms = filters.vms || [];
+  const vmSel = document.getElementById('vm-filter');
+  const projSel = document.getElementById('project-filter');
+  const curVm = vmSel.value, curProj = projSel.value;
+  vmSel.innerHTML = '<option value="">All VMs</option>' +
+    filters.vms.map(v => `<option value="${esc(v)}" ${v===curVm?'selected':''}>${esc(v)}</option>`).join('');
+  projSel.innerHTML = '<option value="">All Projects</option>' +
+    filters.projects.map(p => {
+      const short = p.split('/').filter(Boolean).slice(-2).join('/');
+      return `<option value="${esc(p)}" ${p===curProj?'selected':''}>${esc(short)}</option>`;
+    }).join('');
+}
+
+let vmGroupState = {};  // track open/closed state across refreshes
+let knownVms = [];      // populated from filters for the move-to prompt
+
+function renderList(sessions) {
+  const el = document.getElementById('session-list');
+  if (!sessions.length) { el.innerHTML = '<div class="empty">No sessions found</div>'; return; }
+
+  // Group by vm_name, preserving sort order within each group
+  const groups = {};
+  const groupOrder = [];
+  sessions.forEach(s => {
+    if (!groups[s.vm_name]) {
+      groups[s.vm_name] = [];
+      groupOrder.push(s.vm_name);
+    }
+    groups[s.vm_name].push(s);
+  });
+
+  // Sort groups by most recent session
+  groupOrder.sort((a, b) => {
+    const aTime = groups[a][0]?.last_timestamp || '';
+    const bTime = groups[b][0]?.last_timestamp || '';
+    return bTime.localeCompare(aTime);
+  });
+
+  // Default: first group open, rest closed (unless user has toggled)
+  if (Object.keys(vmGroupState).length === 0) {
+    groupOrder.forEach((vm, i) => { vmGroupState[vm] = i === 0; });
+  }
+
+  const activeSearch = document.getElementById('search').value.trim();
+
+  // Expand all groups when a search is active so results are visible
+  if (activeSearch) {
+    groupOrder.forEach(vm => { vmGroupState[vm] = true; });
+  }
+
+  el.innerHTML = groupOrder.map(vm => {
+    const list = groups[vm];
+    const isOpen = vmGroupState[vm] ?? false;
+    return `<div class="vm-group">
+      <div class="vm-group-header" onclick="toggleVmGroup('${esc(vm)}')">
+        <span class="arrow ${isOpen ? 'open' : ''}" id="vm-arrow-${esc(vm)}">&#9654;</span>
+        <span class="vm-name">${esc(vm)}</span>
+        <span class="vm-count">${list.length} sessions</span>
+      </div>
+      <div class="vm-group-body ${isOpen ? 'open' : ''}" id="vm-body-${esc(vm)}">
+        ${list.map(s => `
+          <div class="session-row" onclick="showDetail('${esc(s.id)}', ${activeSearch ? `'${esc(activeSearch)}'` : 'null'})">
+            <span class="project" title="${esc(s.project)}">${esc(shortProject(s.project))}</span>
+            <span class="summary">${s.custom_title ? '<strong>' + esc(s.custom_title) + '</strong> — ' : ''}${esc(s.summary || '(no summary)')}</span>
+            <span class="count">${s.message_count} msgs</span>
+            <span class="time">${formatTime(s.last_timestamp)}</span>
+            <button class="move-btn" onclick="event.stopPropagation(); moveSession('${esc(s.id)}', '${esc(s.vm_name)}')" title="Move to another group">Move</button>
+            ${s.match_snippet ? `<span class="snippet">${highlightMatch(s.match_snippet, activeSearch)}</span>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function highlightMatch(text, term) {
+  if (!text || !term) return esc(text || '');
+  const escaped = esc(text);
+  const termEsc = esc(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(' + termEsc + ')', 'gi');
+  return escaped.replace(re, '<mark>$1</mark>');
+}
+
+function toggleVmGroup(vm) {
+  vmGroupState[vm] = !vmGroupState[vm];
+  const body = document.getElementById('vm-body-' + vm);
+  const arrow = document.getElementById('vm-arrow-' + vm);
+  if (body) body.classList.toggle('open');
+  if (arrow) arrow.classList.toggle('open');
+}
+
+function shortProject(p) {
+  if (!p) return '';
+  return p.split('/').filter(Boolean).slice(-2).join('/');
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(typeof ts === 'number' ? ts : ts);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+    if (diff < 604800000) return Math.floor(diff/86400000) + 'd ago';
+    return d.toLocaleDateString();
+  } catch { return ts; }
+}
+
+let currentDetail = null;  // { session, messages, searchTerm }
+let displayMode = localStorage.getItem('displayMode') || 'markdown';
+
+if (typeof marked !== 'undefined') {
+  marked.setOptions({ breaks: true, gfm: true });
+}
+
+function setDisplayMode(mode) {
+  if (mode !== 'monospace' && mode !== 'markdown') return;
+  displayMode = mode;
+  localStorage.setItem('displayMode', mode);
+  updateModeButtons();
+  if (currentDetail) renderDetailMessages(currentDetail);
+}
+
+function updateModeButtons() {
+  document.querySelectorAll('.display-mode-toggle .mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === displayMode);
+  });
+}
+
+function renderContentHTML(text, searchTerm) {
+  if (!text) return { html: '', cls: 'mono-mode' };
+  if (searchTerm) {
+    // Highlight path always uses mono-mode so newlines and whitespace are preserved
+    return { html: highlightMatch(text, searchTerm), cls: 'mono-mode' };
+  }
+  if (displayMode === 'markdown' && typeof marked !== 'undefined') {
+    try { return { html: marked.parse(text), cls: 'md-mode' }; }
+    catch (e) { /* fall through to mono */ }
+  }
+  return { html: esc(text), cls: 'mono-mode' };
+}
+
+async function showDetail(id, searchTerm) {
+  document.body.classList.add('detail-active');
+  document.getElementById('list-view').classList.add('hidden');
+  const dv = document.getElementById('detail-view');
+  dv.classList.add('active');
+  document.getElementById('messages').innerHTML = '<div class="loading">Loading...</div>';
+
+  const res = await fetch(`/api/sessions/${id}`);
+  const data = await res.json();
+  const s = data.session;
+
+  document.getElementById('session-meta').innerHTML = `
+    <h2>${esc(s.custom_title || s.summary || s.id)}</h2>
+    <div class="meta-row">
+      <span>VM: <strong>${esc(s.vm_name)}</strong></span>
+      <span>Project: <strong>${esc(s.project)}</strong></span>
+      <span>Messages: <strong>${s.message_count}</strong></span>
+      <span>Last active: <strong>${formatTime(s.last_timestamp)}</strong></span>
+    </div>`;
+
+  currentDetail = { session: s, messages: data.messages, searchTerm: searchTerm || null };
+  renderDetailMessages(currentDetail);
+}
+
+function renderDetailMessages(detail) {
+  const { messages: msgs, searchTerm } = detail;
+  const termLower = (searchTerm || '').toLowerCase();
+  let userMsgIndex = 0;
+  let firstHitId = null;
+  document.getElementById('messages').innerHTML = msgs.map((m, i) => {
+    const role = m.role || m.message_type || 'system';
+    const cls = ['user','assistant','system','tool'].includes(role) ? role : 'system';
+    const isHit = termLower && (m.content || '').toLowerCase().includes(termLower);
+    const domId = role === 'user' ? `user-msg-${userMsgIndex++}` : (isHit ? `hit-msg-${i}` : '');
+    if (isHit && !firstHitId) firstHitId = domId || `hit-msg-${i}`;
+    const idAttr = domId ? `id="${domId}"` : '';
+    const hitClass = isHit ? ' search-hit' : '';
+    if (m.message_type === 'tool_call' || m.message_type === 'tool_result') {
+      return `<div ${idAttr} class="message tool${hitClass}">
+        <div class="role collapsible" onclick="this.classList.toggle('open')">${esc(m.message_type)}</div>
+        <div class="collapsible-content"><div class="content"><pre><code>${searchTerm ? highlightMatch(m.content, searchTerm) : esc(m.content)}</code></pre></div></div>
+        ${m.timestamp ? `<div class="timestamp">${formatTime(m.timestamp)}</div>` : ''}
+      </div>`;
+    }
+    const { html, cls: contentCls } = renderContentHTML(m.content || '', searchTerm);
+    return `<div ${idAttr} class="message ${cls}${hitClass}">
+      <div class="role">${esc(role)}</div>
+      <div class="content ${contentCls}">${html}</div>
+      ${m.timestamp ? `<div class="timestamp">${formatTime(m.timestamp)}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Build nav sidebar with user messages
+  const userMsgs = msgs.filter(m => (m.role || m.message_type) === 'user');
+  document.getElementById('msg-nav-list').innerHTML = userMsgs.map((m, i) => {
+    const preview = (m.content || '').replace(/\s+/g, ' ').slice(0, 60) || '(empty)';
+    return `<div class="msg-nav-item" data-target="user-msg-${i}" onclick="scrollToMsg(this, ${i})" title="${esc(m.content || '')}">
+      <span class="nav-index">${i + 1}.</span>${esc(preview)}
+    </div>`;
+  }).join('');
+
+  setupNavObserver();
+
+  // Scroll to first search hit on initial render only (avoid jumping on mode toggle)
+  if (firstHitId && !detail._rendered) {
+    detail._rendered = true;
+    requestAnimationFrame(() => {
+      const target = document.getElementById(firstHitId);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  } else {
+    detail._rendered = true;
+  }
+}
+
+function scrollToMsg(navItem, index) {
+  const target = document.getElementById('user-msg-' + index);
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Update active state immediately
+  document.querySelectorAll('.msg-nav-item').forEach(el => el.classList.remove('active'));
+  navItem.classList.add('active');
+}
+
+let navObserver = null;
+function setupNavObserver() {
+  if (navObserver) navObserver.disconnect();
+  const targets = document.querySelectorAll('[id^="user-msg-"]');
+  if (!targets.length) return;
+  navObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        document.querySelectorAll('.msg-nav-item').forEach(el => {
+          el.classList.toggle('active', el.dataset.target === id);
+        });
+      }
+    });
+  }, { rootMargin: '-60px 0px -60% 0px', threshold: 0 });
+  targets.forEach(t => navObserver.observe(t));
+}
+
+function showList() {
+  if (navObserver) { navObserver.disconnect(); navObserver = null; }
+  document.body.classList.remove('detail-active');
+  document.getElementById('list-view').classList.remove('hidden');
+  document.getElementById('detail-view').classList.remove('active');
+  currentDetail = null;
+  // Scroll back to top so list is visible under the sticky header
+  window.scrollTo({ top: 0 });
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function refresh() { loadSessions(); loadClients(); }
+
+document.getElementById('search').addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(loadSessions, 300);
+});
+document.getElementById('vm-filter').addEventListener('change', loadSessions);
+document.getElementById('project-filter').addEventListener('change', loadSessions);
+
+function getTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved) return saved;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyTheme(theme) {
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  document.getElementById('theme-toggle').textContent = theme === 'light' ? '\u263E' : '\u2600';
+}
+
+function toggleTheme() {
+  const current = getTheme();
+  const next = current === 'light' ? 'dark' : 'light';
+  localStorage.setItem('theme', next);
+  applyTheme(next);
+}
+
+applyTheme(getTheme());
+updateModeButtons();
+loadSessions();
+loadClients();
+</script>
+</body>
+</html>

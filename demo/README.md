@@ -1,16 +1,23 @@
 # Demo
 
-Synthetic dataset and deployment config for a public demo of the dashboard.
+Synthetic dataset and deployment configs for a public demo of the dashboard.
+
+There are two deployment shapes:
+
+1. **Static export (recommended for a public demo)** — `build_static.py` produces a single self-contained HTML file at `static/index.html`. Drop it on GitHub Pages, Cloudflare Pages, Netlify, or any static host. Zero cold start, zero cost, no server.
+2. **Live Flask server on Render** — `Dockerfile` + `render.yaml`. Real backend, but the free tier sleeps after 15 min of idle (~30s cold-start on the next request).
 
 ## What's in here
 
 - `conversations.py` — 12 synthetic sessions across 3 VMs (`macbook-pro`, `dev-server`, `sandbox`). Covers diverse Claude Code scenarios: tool use (Read/Edit/Bash/Grep/WebSearch/WebFetch), subagent delegation, short Q&A, one long multi-step build (~20 user messages) to showcase the navigation sidebar, and one session with a custom title.
 - `seed_demo.py` — wipes and re-creates `demo-sessions.db` from the conversation data.
+- `build_static.py` — bundles the demo data + a `fetch` shim into `static/index.html` so the dashboard runs entirely client-side.
+- `static/index.html` — the generated static demo (committed so GitHub Pages can serve it directly).
 - `server-config.yaml` — minimal demo config (secrets come from env vars).
 - `Dockerfile` — containerizes the server and runs the seed on every startup.
 - `render.yaml` — one-click deploy blueprint for [Render](https://render.com).
 
-## Run locally
+## Run locally (live server)
 
 From the repo root:
 
@@ -24,7 +31,46 @@ python server/app.py
 
 Open <http://localhost:5099>.
 
-## Deploy to Render
+## Build the static demo
+
+```bash
+python demo/build_static.py
+```
+
+This (re-)seeds the demo DB if needed, fetches every session through the real Flask routes, embeds the JSON in the page, and shims `window.fetch` so the dashboard runs entirely client-side. Output: `demo/static/index.html` (~100 KB, single file, no external assets except the marked.js CDN).
+
+Preview locally:
+
+```bash
+python -m http.server -d demo/static 5097
+```
+
+Then open <http://localhost:5097>.
+
+## Deploy the static demo
+
+Pick whichever host you like — they all work because the output is a plain HTML file.
+
+### GitHub Pages
+
+1. Settings → Pages → Source: **Deploy from a branch**.
+2. Branch: `main`, folder: `/demo/static`. Save.
+3. After ~1 minute it's live at `https://<user>.github.io/<repo>/`.
+
+For a custom subdomain, add a `CNAME` file inside `demo/static/`.
+
+### Cloudflare Pages / Netlify
+
+- **Build command**: `python demo/build_static.py`
+- **Output directory**: `demo/static`
+
+Both will rebuild on every push to `main`.
+
+### Anywhere else
+
+Just upload `demo/static/index.html`. No backend required.
+
+## Deploy to Render (live server)
 
 1. Push the repo to GitHub (you've already done this).
 2. In Render: **New +** → **Blueprint** → select your repo.
@@ -55,5 +101,6 @@ Edit `conversations.py`. The format is a list of `SESSIONS`, each a dict with
 functions `user()`, `assistant()`, `tool_call()`, `tool_result()`, `system()`
 keep the content readable.
 
-Re-run `python demo/seed_demo.py` to regenerate the DB, or redeploy to apply
-changes live.
+Then:
+- For the static demo: `python demo/build_static.py` and commit `demo/static/index.html`. GitHub Pages picks it up on the next push.
+- For the Render server: `python demo/seed_demo.py` locally, or just redeploy — the container re-seeds on every restart.
