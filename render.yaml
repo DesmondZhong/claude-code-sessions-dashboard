@@ -1,0 +1,34 @@
+# Render blueprint — deploy your own Claude Sessions Dashboard server.
+# https://render.com/docs/blueprint-spec
+#
+# Usage:
+#   1. Fork or push this repo to your GitHub account.
+#   2. In Render: New + → Blueprint → select this repo.
+#   3. Render reads this file, creates the web service + persistent disk.
+#   4. In the Environment section, set CLAUDE_DASHBOARD_API_KEY (the shared
+#      secret your clients will use). Optionally override host/port/etc.
+#
+# IMPORTANT: the Starter plan ($7/mo) is required because the free tier has
+# no persistent disk — your SQLite DB and JSONL backups would reset on every
+# cold start. The 1 GB disk below is enough for tens of thousands of sessions.
+#
+# The demo (synthetic data, free, re-seeded on every restart) has its own
+# blueprint at demo/render.yaml.
+
+services:
+  - type: web
+    name: claude-dashboard
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    disk:
+      name: claude-dashboard-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: CLAUDE_DASHBOARD_API_KEY
+        sync: false   # set manually in the Render dashboard
+      - key: PORT
+        value: 5050

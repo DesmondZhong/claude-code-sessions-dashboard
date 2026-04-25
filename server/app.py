@@ -36,6 +36,7 @@ def load_config():
         "CLAUDE_DASHBOARD_HOST": "host",
         "CLAUDE_DASHBOARD_PORT": "port",
         "CLAUDE_DASHBOARD_DB_PATH": "db_path",
+        "CLAUDE_DASHBOARD_BACKUP_DIR": "backup_dir",
     }
     for env_key, cfg_key in env_map.items():
         val = os.environ.get(env_key)

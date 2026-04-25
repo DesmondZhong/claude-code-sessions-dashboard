@@ -47,7 +47,7 @@ In your own deployment you also get:
   │ client.py│         │ client.py│         │ client.py│
   └────┬─────┘         └────┬─────┘         └────┬─────┘
        │                    │                    │
-       │    POST /api/sync  │                    │
+       │     POST /api/sync (HTTPS)              │
        └────────────────────┼────────────────────┘
                             │
                             ▼
@@ -55,15 +55,13 @@ In your own deployment you also get:
                │  Server (app.py)   │
                │  Flask + SQLite    │
                │  + JSONL backups   │
-               └────────────────────┘
-                            │
-                   Cloudflare Tunnel
-                 + Cloudflare Access
-                            │
-                    Browser (anywhere)
+               └─────────┬──────────┘
+                         │
+                         ▼
+                 Browser (anywhere)
 ```
 
-- **Server** (`server/app.py`) — Flask + SQLite dashboard. Stores parsed sessions in SQLite and raw JSONL backups on disk.
+- **Server** (`server/app.py`) — Flask + SQLite dashboard. Stores parsed sessions in SQLite and raw JSONL backups on disk. Run it on your own machine, a private VPS, or a managed host (Render etc.) — see [Deployment Options](#deployment-options) below.
 - **Client** (`client/client.py`) — lightweight sync script on each machine. Reads local `~/.claude/` session files and pushes to the server.
 
 ## Quick Start
@@ -190,11 +188,11 @@ cd client
 
 If [NSSM](https://nssm.cc/) is installed, these create proper Windows services. Otherwise, they fall back to scheduled tasks that run at logon.
 
-## Making the Server Reachable Across Machines
+## Deployment Options
 
-Your clients need to reach the server over the network. Options:
+You can run the server wherever you like — your laptop, a NAS, a cloud VM, or a managed host. The choice affects how clients reach it.
 
-### Option A: Cloudflare Tunnel (recommended for internet access)
+### Option A: Cloudflare Tunnel (self-host, public via tunnel)
 
 Exposes your server securely without opening ports or configuring firewalls.
 
@@ -240,12 +238,33 @@ If all machines are on Tailscale, the server is reachable via its Tailscale IP (
 
 If machines are on the same network, use the server's LAN IP directly. For machines on different networks, you'll need port forwarding on your router (port 5050).
 
-Set the client config accordingly:
+### Option D: Render (or other PaaS — managed hosting with public HTTPS)
+
+Skip self-hosting entirely. A `render.yaml` blueprint at the repo root provisions a Docker web service with a 1 GB persistent disk and exposes it at a public HTTPS URL.
+
+```bash
+# In Render: New + → Blueprint → pick this repo
+# Then in the service Environment section, set CLAUDE_DASHBOARD_API_KEY
+# (any random string — your clients will need the same value).
+```
+
+Notes:
+- **The Starter plan ($7/mo) is required.** Render's free tier has no persistent disk, so your SQLite DB would reset on every cold start. The blueprint configures Starter by default.
+- The same `Dockerfile` works on **Fly.io**, **Railway**, **Koyeb**, etc. — anywhere that runs containers with a mounted volume. Set `CLAUDE_DASHBOARD_DB_PATH` and `CLAUDE_DASHBOARD_BACKUP_DIR` to point at the volume mount path.
+- Your clients then point at the public URL:
+
+   ```yaml
+   # client-config.yaml
+   server_url: "https://claude-dashboard.onrender.com"
+   ```
+
+### Picking a client `server_url`
 
 ```yaml
 # client-config.yaml
-server_url: "https://sessions.yourdomain.com"  # Cloudflare Tunnel
-# server_url: "http://100.64.0.1:5050"         # Tailscale
+server_url: "https://sessions.yourdomain.com"   # Cloudflare Tunnel
+# server_url: "https://claude-dashboard.onrender.com"  # Render / PaaS
+# server_url: "http://100.64.0.1:5050"          # Tailscale
 # server_url: "http://192.168.1.50:5050"        # LAN
 ```
 
@@ -265,7 +284,7 @@ All config values can be overridden with environment variables, so you don't nee
 | `host` | `CLAUDE_DASHBOARD_HOST` | Bind address | `0.0.0.0` |
 | `port` | `CLAUDE_DASHBOARD_PORT` | Port | `5050` |
 | `db_path` | `CLAUDE_DASHBOARD_DB_PATH` | SQLite database path | `./sessions.db` |
-| `backup_dir` | — | Raw JSONL backup directory | `./backups` |
+| `backup_dir` | `CLAUDE_DASHBOARD_BACKUP_DIR` | Raw JSONL backup directory | `./backups` |
 | `debug` | — | Flask debug mode | `false` |
 
 ### Client (`client/client-config.yaml`)
